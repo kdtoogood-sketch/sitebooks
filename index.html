@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>SiteBooks — K.D Constructions</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<style>
+*{font-family:'Roboto',sans-serif;box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;}
+body{background:#f0f2f8;color:#1c1d2e;max-width:480px;margin:0 auto;display:flex;flex-direction:column;}
+:root{--bg:#f0f2f8;--card:#fff;--card2:#f7f8fc;--border:#e3e6f0;--accent:#f05a00;--accentbg:#fff3ec;--accentborder:#ffd4b0;
+--green:#16a06a;--greenbg:#e6f8f1;--red:#e03535;--redbg:#fdeaea;--redborder:#f5b8b8;--blue:#2b6ef0;--bluebg:#eaf0ff;--purple:#7040d0;--purplebg:#f0ebff;
+--text:#1c1d2e;--text2:#4a4d6a;--muted:#9496b0;--shadow:0 2px 16px rgba(28,29,46,0.07);--shadow-accent:0 4px 20px rgba(240,90,0,0.18);--nav-h:62px;}
+.g{color:var(--green)}.r{color:var(--red)}.b{color:var(--blue)}.muted{font-size:11px;color:var(--muted)}
+/* login */
+#login{position:fixed;inset:0;background:linear-gradient(135deg,#1c1d2e,#2f2440 60%,#4a2a10);display:flex;align-items:center;justify-content:center;padding:24px;z-index:900}
+.lbox{background:#fff;border-radius:22px;padding:32px 26px;width:100%;max-width:340px;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+.lbox h1{font-size:26px;font-weight:900}.lbox h1 span{color:var(--accent)}.lbox p{font-size:12px;color:var(--muted);margin:4px 0 22px}
+#loginErr{display:none;color:var(--red);font-size:12px;margin-top:10px;text-align:center}
+/* shell */
+#app{display:none;flex-direction:column;height:100%}
+.header{background:var(--card);padding:10px 14px;border-bottom:1px solid var(--border);box-shadow:var(--shadow);flex-shrink:0;display:flex;align-items:center;gap:10px}
+.brand{font-weight:900;font-size:17px;letter-spacing:-.4px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.brand span{color:var(--accent)}
+.icon-btn{width:34px;height:34px;border-radius:11px;border:1.5px solid var(--border);background:var(--card2);color:var(--text2);font-size:15px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.who{font-size:11px;font-weight:700;background:var(--accentbg);color:var(--accent);border:1.5px solid var(--accentborder);border-radius:20px;padding:4px 11px;cursor:pointer}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--green);flex-shrink:0}.dot.saving{background:#e09000;animation:pulse 1s infinite}.dot.error{background:var(--red)}
+@keyframes pulse{50%{opacity:.4}}
+#scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px 24px}
+.bottom-nav{height:var(--nav-h);background:var(--card);border-top:1.5px solid var(--border);display:flex;flex-shrink:0;box-shadow:0 -2px 12px rgba(28,29,46,.06)}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer}
+.nav-icon{font-size:19px}.nav-label{font-size:9px;font-weight:700;color:var(--muted)}.nav-item.active .nav-label{color:var(--accent)}.nav-item.active .nav-icon{transform:scale(1.12)}
+/* generic */
+.sec-hdr{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:16px 0 9px;display:flex;justify-content:space-between;align-items:center}
+.sec-hdr:first-child{margin-top:0}
+.add-btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:6px 13px;font-size:11px;font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0}
+.card{background:var(--card);border:1.5px solid var(--border);border-radius:16px;padding:13px;margin-bottom:11px;box-shadow:var(--shadow)}
+.empty{text-align:center;padding:38px 20px;color:var(--muted);font-size:13px;line-height:1.5}.empty .emo{font-size:38px;margin-bottom:6px}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px}.kv:last-child{border-bottom:0}.kv span{color:var(--text2)}
+.kv.total{font-size:15px;font-weight:900;border-top:2px solid var(--border);margin-top:4px;padding-top:10px}
+.tr-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:13px;border-bottom:1px solid var(--border)}.tr-row:last-child{border-bottom:0}.tr-row .amt{font-weight:900;font-size:14px}
+/* hero */
+.hero{background:linear-gradient(135deg,#1c1d2e,#3a2a4a);color:#fff;border-radius:20px;padding:18px;margin-bottom:14px;box-shadow:var(--shadow-accent)}
+.hero-lbl{font-size:11px;opacity:.7;text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.hero-val{font-size:32px;font-weight:900;margin:4px 0 0;letter-spacing:-1px}.hero.small .hero-val{font-size:26px}
+.hero-val.g{color:#5ee3a8}.hero-val.r{color:#ff8a8a}.hero-sub{font-size:11px;opacity:.6;margin-bottom:12px}
+.hero-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1px solid rgba(255,255,255,.15);padding-top:12px}
+.hero-row b{display:block;font-size:13px;font-weight:900}.hero-row span{font-size:9px;opacity:.65;text-transform:uppercase;font-weight:700}
+.hero-row .g{color:#5ee3a8}.hero-row .r{color:#ff8a8a}
+/* site cards */
+.site-card{background:var(--card);border:1.5px solid var(--border);border-radius:18px;padding:15px;margin-bottom:12px;box-shadow:var(--shadow);cursor:pointer}
+.site-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.site-name{font-weight:900;font-size:15px}.site-loc{font-size:11px;color:var(--muted);margin-top:3px}
+.site-badge{background:var(--greenbg);color:var(--green);border-radius:20px;padding:4px 11px;font-size:10px;font-weight:700;white-space:nowrap}.site-badge.closed{background:var(--purplebg);color:var(--purple)}
+.site-money3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.site-money3>div{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:9px 6px;text-align:center}
+.site-money3 .v{font-size:13px;font-weight:900}.site-money3 .l{font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-top:2px}
+/* tabs */
+.tabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto}.tab{padding:8px 13px;border-radius:20px;font-size:12px;font-weight:700;background:var(--card);border:1.5px solid var(--border);color:var(--text2);cursor:pointer;white-space:nowrap}
+.tab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* entries */
+.entry{display:flex;justify-content:space-between;gap:10px;background:var(--card);border:1.5px solid var(--border);border-radius:13px;padding:11px 12px;margin-bottom:8px;align-items:flex-start;cursor:pointer}
+.entry-t{font-size:13px;font-weight:700}.entry-s{font-size:11px;color:var(--muted);margin-top:2px}.entry-a{font-size:14px;font-weight:900;white-space:nowrap}
+.tagsetup{color:var(--purple)}.tagov{color:var(--accent)}
+.mini-btn{border:none;border-radius:999px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0}.mini-btn.edit{background:var(--bluebg);color:var(--blue)}.mini-btn.del{background:var(--redbg);color:var(--red)}
+/* tables */
+.tbl-wrap{overflow-x:auto;background:var(--card);border:1.5px solid var(--border);border-radius:14px;margin-bottom:11px}
+.tbl{width:100%;border-collapse:collapse;font-size:12px;min-width:340px}.tbl th{text-align:left;font-size:9.5px;text-transform:uppercase;color:var(--muted);padding:9px 8px;border-bottom:1.5px solid var(--border);font-weight:700;white-space:nowrap}
+.tbl td{padding:9px 8px;border-bottom:1px solid var(--border);white-space:nowrap}.tbl tr:last-child td{border-bottom:0}.tbl .totrow td{background:var(--card2);border-top:2px solid var(--border)}
+.bar-row{margin-bottom:10px}.bar-top{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}.bar-top small{color:var(--muted);font-weight:400}.bar{height:7px;background:var(--card2);border-radius:5px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#ff8c42);border-radius:5px}
+.chart{display:flex;align-items:flex-end;gap:6px;height:130px}.ccol{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;min-width:0}.cbars{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;gap:2px}.cbars i{width:42%;border-radius:4px 4px 0 0;min-height:2px}
+.ci{background:var(--green)}.ce{background:var(--red)}.clbl{font-size:9px;color:var(--muted);margin-top:4px;font-weight:700}
+.legend{display:flex;gap:14px;justify-content:center;margin-top:10px;font-size:11px;color:var(--text2)}.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+.filters{display:flex;gap:8px;align-items:center;margin-bottom:10px;font-size:12px;color:var(--muted)}.filters .form-input,.filters .form-select{padding:8px 10px;font-size:12px}
+.btn-row{display:flex;gap:8px;margin-top:6px}.site-btn{flex:1;padding:11px;border:none;border-radius:12px;font-size:12px;font-weight:700;cursor:pointer}.site-btn.share{background:var(--bluebg);color:var(--blue)}.site-btn.pay{background:var(--greenbg);color:var(--green)}
+/* forms + modal */
+#modal{display:none;position:fixed;inset:0;background:rgba(28,29,46,.55);z-index:400;backdrop-filter:blur(3px)}#modal.open{display:flex;align-items:flex-end}
+.modal{background:var(--card);border-radius:24px 24px 0 0;padding:18px 16px 30px;width:100%;max-width:480px;margin:0 auto;max-height:90vh;overflow-y:auto}
+.modal-title{font-weight:900;font-size:18px;margin-bottom:14px}
+.form-group{margin-bottom:12px}.form-label{font-size:11px;color:var(--muted);margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:12px;padding:11px 13px;font-size:14px;color:var(--text);outline:none}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent)}.form-textarea{min-height:64px;resize:vertical}
+.form-row{display:flex;gap:10px}.form-row .form-group{flex:1;min-width:0}
+.submit-btn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:14px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;box-shadow:var(--shadow-accent)}
+.cancel-btn{width:100%;background:transparent;color:var(--muted);border:1.5px solid var(--border);border-radius:14px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px}.cancel-btn.danger{background:var(--redbg);color:var(--red);border-color:var(--redborder)}
+.split-row{display:flex;gap:8px;align-items:center;margin-bottom:7px}.split-name{flex:1.4;font-size:13px;font-weight:700}.split-in{flex:1}.pct{font-size:13px;color:var(--muted)}
+.split-total{font-size:12px;font-weight:700;margin:4px 0 8px}.split-total.ok{color:var(--green)}.split-total.bad{color:var(--red)}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:6px}.pchip{padding:7px 13px;border-radius:20px;font-size:12px;font-weight:700;background:var(--card2);border:1.5px solid var(--border);color:var(--text2);cursor:pointer}.pchip.on{background:var(--accent);color:#fff;border-color:var(--accent)}.pchip.add{border-style:dashed;color:var(--blue)}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer}.chk input{width:18px;height:18px}
+img.rc{max-width:100%;max-height:150px;border-radius:10px;margin-top:8px;border:1px solid var(--border)}
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1c1d2e;color:#fff;padding:10px 18px;border-radius:24px;font-size:13px;font-weight:700;opacity:0;transition:opacity .25s;z-index:999;pointer-events:none;max-width:88%;text-align:center}
+</style>
+</head>
+<body>
+<div id="login"><div class="lbox"><h1>Site<span>Books</span></h1><p>Partnership ledger · K.D Constructions</p>
+<label class="form-label">Password</label><input class="form-input" type="password" id="loginPass" onkeydown="if(event.key==='Enter')doLogin()" autocomplete="current-password">
+<button class="submit-btn" onclick="doLogin()">Enter</button><div id="loginErr">Wrong password</div></div></div>
+
+<div id="app">
+  <div class="header"><button class="icon-btn" id="backBtn" style="display:none" onclick="go('sites')">‹</button><div class="brand">Site<span>Books</span> · <span id="pageTitle" style="color:var(--text);font-weight:700;font-size:14px"></span></div><div class="dot" id="syncDot" title="Sync status"></div><div class="who" id="who" onclick="if(confirm('Log out?'))doLogout()"></div></div>
+  <div id="scroll"><div id="view"></div></div>
+  <div class="bottom-nav">
+    <div class="nav-item" data-tab="home" onclick="go('home')"><div class="nav-icon">🏠</div><div class="nav-label">Home</div></div>
+    <div class="nav-item" data-tab="sites" onclick="go('sites')"><div class="nav-icon">🏗️</div><div class="nav-label">Sites</div></div>
+    <div class="nav-item" data-tab="reports" onclick="go('reports')"><div class="nav-icon">📊</div><div class="nav-label">Reports</div></div>
+    <div class="nav-item" data-tab="partners" onclick="go('partners')"><div class="nav-icon">👥</div><div class="nav-label">Partners</div></div>
+    <div class="nav-item" data-tab="log" onclick="go('log')"><div class="nav-icon">🧾</div><div class="nav-label">Activity</div></div>
+  </div>
+</div>
+<div id="modal" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBody"></div></div>
+<div id="toast"></div>
+<script>
+/* ════════════════════════════════════════════════════════════
+   ENGINE — pure functions, no DOM. All money is handled in PAISE
+   (integers) internally so that splits never leave rounding drift.
+   ════════════════════════════════════════════════════════════ */
+
+// ---- money helpers -------------------------------------------------
+function toPaise(rupees){ return Math.round(Number(rupees||0)*100); }
+function toRupees(paise){ return (paise||0)/100; }
+
+/* Split `totalPaise` across shares (percentages, must be > 0 sum).
+   Uses the largest-remainder method so parts ALWAYS add up to the total exactly.
+   shares: [{pid, pct}]  ->  {pid: paise} */
+function splitPaise(totalPaise, shares){
+  const out={};
+  const list=(shares||[]).filter(s=>Number(s.pct)>0);
+  const sum=list.reduce((a,s)=>a+Number(s.pct),0);
+  if(!list.length||sum<=0){ return out; }
+  const sign=totalPaise<0?-1:1;
+  const abs=Math.abs(totalPaise);
+  let used=0;
+  const rows=list.map(s=>{
+    const exact=abs*Number(s.pct)/sum;
+    const floor=Math.floor(exact);
+    used+=floor;
+    return {pid:s.pid,floor,frac:exact-floor};
+  });
+  let rem=abs-used;
+  rows.slice().sort((a,b)=>b.frac-a.frac).forEach(r=>{ if(rem>0){r.floor+=1;rem-=1;} });
+  rows.forEach(r=>{ out[r.pid]=(out[r.pid]||0)+sign*r.floor; });
+  return out;
+}
+
+/* Amount lines like paidBy / receivedBy: [{pid, amount(rupees)}] -> {pid: paise} */
+function sumLines(lines){
+  const out={};
+  (lines||[]).forEach(l=>{
+    const p=toPaise(l.amount);
+    if(!l.pid||!p)return;
+    out[l.pid]=(out[l.pid]||0)+p;
+  });
+  return out;
+}
+
+function pctTotal(shares){ return Math.round((shares||[]).reduce((a,s)=>a+Number(s.pct||0),0)*1000)/1000; }
+
+/* ---- validation used by the UI and by tests -------------------- */
+function validateShares(shares){
+  const t=pctTotal(shares);
+  if(!shares||!shares.length) return {ok:false,msg:'Add at least one partner'};
+  if(shares.some(s=>Number(s.pct)<0)) return {ok:false,msg:'Percentages cannot be negative'};
+  if(Math.abs(t-100)>0.001) return {ok:false,msg:'Shares total '+t+'% — must be exactly 100%'};
+  return {ok:true,msg:''};
+}
+function validateLines(lines,totalRupees,label){
+  const ls=(lines||[]).filter(l=>l.pid&&Number(l.amount)>0);
+  if(!ls.length) return {ok:false,msg:label+': choose at least one partner and amount'};
+  const sum=ls.reduce((a,l)=>a+toPaise(l.amount),0);
+  const tot=toPaise(totalRupees);
+  if(sum!==tot) return {ok:false,msg:label+' lines add to '+toRupees(sum).toLocaleString('en-IN')+' but the total is '+toRupees(tot).toLocaleString('en-IN')};
+  return {ok:true,msg:''};
+}
+
+/* ════════════════════════════════════════════════════════════
+   SITE POSITION
+   For one site, compute each partner's:
+     paidOut       – what they paid toward expenses/capital-setup
+     expShare      – their share of all expenses
+     revHeld       – income they physically received
+     revShare      – their share of income (by PROFIT ratio)
+     settledOut    – settlement money they paid to others
+     settledIn     – settlement money they received from others
+     net           – positive => partnership owes THEM; negative => THEY owe
+   The settlement is:  net = (paidOut - expShare) + (revShare - revHeld) + settledOut - settledIn
+   Intuition: money they put in beyond their share is owed back; revenue they are
+   holding beyond their share of it must be handed over.
+   ════════════════════════════════════════════════════════════ */
+function computeSite(site, expenses, incomes, settlements, opts){
+  opts=opts||{};
+  const from=opts.from||'', to=opts.to||'';
+  const inRange=d=>(!from||d>=from)&&(!to||d<=to);
+  const pids=(site.partners||[]).map(p=>p.pid);
+  const P={};
+  pids.forEach(pid=>{ P[pid]={pid,paidOut:0,expShare:0,revHeld:0,revShare:0,settledOut:0,settledIn:0,capitalIn:0,capitalHeld:0,overrideShare:0,net:0}; });
+  const ensure=pid=>{ if(!P[pid])P[pid]={pid,paidOut:0,expShare:0,revHeld:0,revShare:0,settledOut:0,settledIn:0,capitalIn:0,capitalHeld:0,overrideShare:0,net:0,removed:true}; return P[pid]; };
+
+  let totalOverrideExp=0, totalExp=0, totalRunExp=0, totalSetupExp=0, totalInc=0, totalCapital=0, totalRefund=0;
+  const byCategory={}, byMonth={};
+  const mon=d=>(d||'').slice(0,7);
+  const bump=(m,k,v)=>{ if(!m)return; byMonth[m]=byMonth[m]||{month:m,exp:0,inc:0,runExp:0,setupExp:0}; byMonth[m][k]+=v; };
+
+  (expenses||[]).filter(e=>!e.deleted&&inRange(e.date)).forEach(e=>{
+    const amt=toPaise(e.amount);
+    totalExp+=amt;
+    if(e.kind==='setup') totalSetupExp+=amt; else totalRunExp+=amt;
+    const cat=(e.category||'Uncategorised');
+    byCategory[cat]=(byCategory[cat]||0)+amt;
+    bump(mon(e.date),'exp',amt);
+    bump(mon(e.date),e.kind==='setup'?'setupExp':'runExp',amt);
+    // who paid
+    const paid=sumLines(e.paidBy);
+    Object.keys(paid).forEach(pid=>{ ensure(pid).paidOut+=paid[pid]; });
+    // who bears it — the split STORED ON THE ENTRY (so later site-split edits never rewrite history)
+    // Resolution order:  explicit per-entry override  >  split stamped when the entry was saved  >  site's current split.
+    // The stamp is what keeps history stable when someone later edits the site's percentages.
+    const overridden=!!(e.split&&e.split.length);
+    const shares=overridden?e.split:((e.stampedSplit&&e.stampedSplit.length)?e.stampedSplit:(site.expenseSplit||[]));
+    const parts=splitPaise(amt,shares);
+    Object.keys(parts).forEach(pid=>{ ensure(pid).expShare+=parts[pid]; });
+    if(overridden){
+      // settled on its own terms, outside the pooled profit calculation
+      totalOverrideExp+=amt;
+      Object.keys(parts).forEach(pid=>{ ensure(pid).overrideShare=(P[pid].overrideShare||0)+parts[pid]; });
+    }
+  });
+
+  (incomes||[]).filter(i=>!i.deleted&&inRange(i.date)).forEach(i=>{
+    const amt=toPaise(i.amount);
+    const held=sumLines(i.receivedBy);
+    if(i.kind==='capital'){
+      /* A capital contribution is money one partner hands over to be held by another (or by the
+         partner who is running the site). It is NOT income and NOT profit.
+         Modelled as a transfer:  contributedBy (paid in)  ->  receivedBy (now holds it).
+         The holder is now holding partnership money, so they owe it back; the contributor is owed it. */
+      totalCapital+=amt;
+      const gave=sumLines(i.contributedBy);
+      Object.keys(gave).forEach(pid=>{ ensure(pid).capitalIn+=gave[pid]; });
+      Object.keys(held).forEach(pid=>{ ensure(pid).capitalHeld=(P[pid].capitalHeld||0)+held[pid]; });
+      return;
+    }
+    if(i.kind==='refund'){
+      // deposit refund received: reduces cost, is partnership money held by receiver
+      totalRefund+=amt;
+    } else {
+      totalInc+=amt;
+      bump(mon(i.date),'inc',amt);
+    }
+    Object.keys(held).forEach(pid=>{ ensure(pid).revHeld+=held[pid]; });
+    // Rule A only ("separate"): each income entry is shared by the profit ratio on its own.
+    if(site.profitRule==='separate'){
+      const shares=(i.split&&i.split.length)?i.split:(site.profitSplit||[]);
+      const parts=splitPaise(amt,shares);
+      Object.keys(parts).forEach(pid=>{ ensure(pid).revShare+=parts[pid]; });
+    }
+  });
+
+  (settlements||[]).filter(s=>!s.deleted&&inRange(s.date)).forEach(s=>{
+    const amt=toPaise(s.amount);
+    if(s.from) ensure(s.from).settledOut+=amt;
+    if(s.to)   ensure(s.to).settledIn+=amt;
+  });
+
+  // Net of refunds counts against expenses for profit purposes
+  const netExpenses=totalExp-totalRefund;
+  const profit=totalInc-netExpenses;                       // headline profit (all costs)
+  // For the pooled rule, costs carrying an explicit per-entry split are borne by exactly those people,
+  // so the amount left to share by the profit ratio is income − refunds' effect − NON-overridden costs.
+  const poolProfit=totalInc-(totalExp-totalOverrideExp-totalRefund);
+  const poolParts=splitPaise(poolProfit,site.profitSplit||[]);
+  const profitParts=splitPaise(profit,site.profitSplit||[]);   // shown on reports
+
+  /* Two ways to settle, chosen per site (site.profitRule):
+     'pooled'   (DEFAULT, Rule B): pool costs against income, then share the PROFIT by the profit ratio.
+                entitlement = profit share.
+     'separate' (Rule A): costs follow the expense ratio, income follows the profit ratio.
+                entitlement = revShare(income by profit ratio) − expShare(costs by expense ratio).
+     In both, cashNow is what the partner has physically paid out / is holding:
+                cashNow = revHeld + refunds held − paidOut − capitalIn      (capital is returned to them)
+     and  net = entitlement − cashNow  (+ settlements already made).
+     When expense ratio == profit ratio the two rules give identical numbers. */
+  Object.values(P).forEach(p=>{
+    // capital: what they handed over is owed back to them; what they now hold is owed to others
+    const cashNow=p.revHeld-p.paidOut-p.capitalIn+p.capitalHeld;
+    let entitled;
+    if(site.profitRule==='separate'){ entitled=p.revShare-p.expShare; }
+    else { entitled=(poolParts[p.pid]||0)-(p.overrideShare||0); p.revShare=poolParts[p.pid]||0; }
+    p.entitled=entitled;
+    p.net=(entitled-cashNow)+p.settledOut-p.settledIn;
+  });
+
+  return {
+    partners:P, totalExp, totalRunExp, totalSetupExp, totalInc, totalCapital, totalRefund,
+    netExpenses, profit,
+    runningProfit: totalInc-(totalRunExp-0), // before setup/one-time costs
+    profitParts, byCategory, byMonth:Object.values(byMonth).sort((a,b)=>a.month.localeCompare(b.month))
+  };
+}
+
+/* Minimum-transfers settlement.
+   Input: {pid: netPaise}  (positive = is owed, negative = owes). Must sum to ~0.
+   Greedy: repeatedly match the largest debtor with the largest creditor.
+   Returns [{from,to,amount(paise)}].  */
+function settleUp(netByPid){
+  const cred=[], debt=[];
+  Object.keys(netByPid).forEach(pid=>{
+    const v=netByPid[pid];
+    if(v>0)cred.push({pid,v}); else if(v<0)debt.push({pid,v:-v});
+  });
+  const out=[];
+  cred.sort((a,b)=>b.v-a.v); debt.sort((a,b)=>b.v-a.v);
+  let i=0,j=0;
+  while(i<cred.length&&j<debt.length){
+    const x=Math.min(cred[i].v,debt[j].v);
+    if(x>0) out.push({from:debt[j].pid,to:cred[i].pid,amount:x});
+    cred[i].v-=x; debt[j].v-=x;
+    if(cred[i].v===0)i++;
+    if(debt[j].v===0)j++;
+  }
+  return out;
+}
+
+/* Overall position across MANY sites: sums each partner's net and settles once */
+function computeOverall(sites, expByS, incByS, setByS, opts){
+  const per=[]; const tot={}; let totalExp=0,totalInc=0,profit=0,totalCapital=0;
+  const byMonth={};
+  sites.forEach(s=>{
+    const r=computeSite(s,expByS[s.id]||[],incByS[s.id]||[],setByS[s.id]||[],opts);
+    per.push({site:s,res:r});
+    totalExp+=r.totalExp; totalInc+=r.totalInc; profit+=r.profit; totalCapital+=r.totalCapital;
+    Object.values(r.partners).forEach(p=>{ tot[p.pid]=(tot[p.pid]||0)+p.net; });
+    r.byMonth.forEach(m=>{
+      const b=byMonth[m.month]=byMonth[m.month]||{month:m.month,exp:0,inc:0,runExp:0,setupExp:0};
+      b.exp+=m.exp;b.inc+=m.inc;b.runExp+=m.runExp;b.setupExp+=m.setupExp;
+    });
+  });
+  return {per,netByPid:tot,transfers:settleUp(tot),totalExp,totalInc,profit,totalCapital,
+          byMonth:Object.values(byMonth).sort((a,b)=>a.month.localeCompare(b.month))};
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   STORE — one Firestore document per record.
+   Collection layout (all under  sitebooks_<kind>/<id>):
+     sitebooks_partners   sitebooks_sites   sitebooks_expenses
+     sitebooks_incomes    sitebooks_settlements   sitebooks_log
+   Why per-record: with 3 people entering money at the same time, a single
+   shared blob means "last save wins" and silently drops someone's entry.
+   Here two people adding different entries never touch the same document.
+   Edits to the SAME record use optimistic concurrency (rev number).
+   Works with plain fetch (REST) — no SDK, matching the rest of your apps.
+   ════════════════════════════════════════════════════════════ */
+
+const FB_PROJECT='propdesk-f50e0';
+const FB_KEY='AIzaSyBiBmFAJHTxoZAddAON94u7FQ_d-RpX2io';
+const FB_BASE=`https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents`;
+const KINDS=['partners','sites','expenses','incomes','settlements','log'];
+const COLL=k=>'sitebooks_'+k;
+
+/* ---- Firestore value encoding ---- */
+function fsEnc(v){
+  if(v===null||v===undefined) return {nullValue:null};
+  if(typeof v==='boolean') return {booleanValue:v};
+  if(typeof v==='number')  return Number.isInteger(v)?{integerValue:String(v)}:{doubleValue:v};
+  if(typeof v==='string')  return {stringValue:v};
+  if(Array.isArray(v))     return {arrayValue:{values:v.map(fsEnc)}};
+  if(typeof v==='object')  return {mapValue:{fields:Object.fromEntries(Object.entries(v).filter(([,x])=>x!==undefined).map(([k,x])=>[k,fsEnc(x)]))}};
+  return {stringValue:String(v)};
+}
+function fsDec(v){
+  if(!v) return null;
+  if('nullValue' in v) return null;
+  if('booleanValue' in v) return v.booleanValue;
+  if('integerValue' in v) return Number(v.integerValue);
+  if('doubleValue' in v) return v.doubleValue;
+  if('stringValue' in v) return v.stringValue;
+  if('arrayValue' in v) return (v.arrayValue.values||[]).map(fsDec);
+  if('mapValue' in v) return Object.fromEntries(Object.entries(v.mapValue.fields||{}).map(([k,x])=>[k,fsDec(x)]));
+  return null;
+}
+const docToObj=d=>{ const o=Object.fromEntries(Object.entries(d.fields||{}).map(([k,v])=>[k,fsDec(v)])); return o; };
+const objToDoc=o=>({fields:Object.fromEntries(Object.entries(o).filter(([,x])=>x!==undefined).map(([k,v])=>[k,fsEnc(v)]))});
+
+/* ---- in-memory + localStorage cache (so the app opens instantly and works on bad signal) ---- */
+const DB={partners:[],sites:[],expenses:[],incomes:[],settlements:[],log:[]};
+const LS_KEY='sitebooks_cache_v1';
+function cacheSave(){ try{localStorage.setItem(LS_KEY,JSON.stringify(DB));}catch(e){} }
+function cacheLoad(){ try{const r=localStorage.getItem(LS_KEY); if(r){const o=JSON.parse(r); KINDS.forEach(k=>{DB[k]=o[k]||[];});}}catch(e){} }
+
+/* pending write queue: survives offline, retried on next tick */
+const QUEUE_KEY='sitebooks_queue_v1';
+let queue=[]; try{queue=JSON.parse(localStorage.getItem(QUEUE_KEY)||'[]');}catch(e){queue=[];}
+const qSave=()=>{ try{localStorage.setItem(QUEUE_KEY,JSON.stringify(queue));}catch(e){} };
+
+let syncState='synced';           // 'synced' | 'saving' | 'error'
+let onSyncChange=()=>{};
+function _setSyncCb(f){ onSyncChange=f; }
+function _queueLen(){ return queue.length; }
+function setSync(s){ if(syncState!==s){syncState=s;onSyncChange(s);} }
+
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+
+/* ---- low level REST ---- */
+async function fsList(kind){
+  let out=[], token='';
+  do{
+    const url=`${FB_BASE}/${COLL(kind)}?key=${FB_KEY}&pageSize=300${token?'&pageToken='+encodeURIComponent(token):''}`;
+    const r=await fetch(url,{cache:'no-store'});
+    if(r.status===404) return [];          // collection doesn't exist yet
+    if(!r.ok) throw new Error('list '+kind+' '+r.status);
+    const j=await r.json();
+    (j.documents||[]).forEach(d=>{ const o=docToObj(d); o.id=d.name.split('/').pop(); out.push(o); });
+    token=j.nextPageToken||'';
+  }while(token);
+  return out;
+}
+async function fsGet(kind,id){
+  const r=await fetch(`${FB_BASE}/${COLL(kind)}/${id}?key=${FB_KEY}`,{cache:'no-store'});
+  if(r.status===404) return null;
+  if(!r.ok) throw new Error('get '+r.status);
+  const d=await r.json(); const o=docToObj(d); o.id=id; return o;
+}
+async function fsSet(kind,obj){
+  const {id,...rest}=obj;
+  const r=await fetch(`${FB_BASE}/${COLL(kind)}/${id}?key=${FB_KEY}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(objToDoc(rest))});
+  if(!r.ok) throw new Error('set '+kind+' '+r.status);
+}
+
+/* ---- local record helpers ---- */
+const listOf=k=>DB[k];
+function findLocal(kind,id){ return DB[kind].find(x=>x.id===id); }
+function upsertLocal(kind,obj){
+  const i=DB[kind].findIndex(x=>x.id===obj.id);
+  if(i>=0) DB[kind][i]=obj; else DB[kind].push(obj);
+}
+
+/* Save a record: write locally at once (UI stays instant), queue the network write. */
+function saveRecord(kind,obj,who){
+  const now=Date.now();
+  const existing=findLocal(kind,obj.id);
+  const rec={...obj};
+  if(!rec.id) rec.id=uid();
+  rec.rev=(existing?.rev||0)+1;
+  rec.updatedAt=now; rec.updatedBy=who||'';
+  if(!existing){ rec.createdAt=now; rec.createdBy=who||''; } else { rec.createdAt=existing.createdAt; rec.createdBy=existing.createdBy; }
+  upsertLocal(kind,rec); cacheSave();
+  queue=queue.filter(q=>!(q.kind===kind&&q.id===rec.id));   // newest version replaces older queued one
+  queue.push({kind,id:rec.id,baseRev:existing?.rev||0});
+  qSave(); flushQueue();
+  return rec;
+}
+/* Soft delete — records are never physically removed, so a mistake is recoverable and the log stays honest */
+function deleteRecord(kind,id,who){
+  const e=findLocal(kind,id); if(!e) return;
+  return saveRecord(kind,{...e,deleted:true,deletedAt:Date.now(),deletedBy:who||''},who);
+}
+
+let flushPromise=null, flushAgain=false;
+/* Returns the in-flight flush so callers can await the REAL work. If more items are queued while a
+   flush is running, it loops again rather than returning early and leaving them stranded.
+
+   IMPORTANT: the async body can finish synchronously (e.g. called with an empty queue). The promise is therefore
+   cleared from a .then() that runs AFTER the assignment below — never from a `finally` inside the body, which
+   would run first and then be overwritten, leaving a dead promise installed forever. */
+async function _flushBody(){
+  do{
+    flushAgain=false;
+    while(queue.length){
+      const q=queue[0]; const local=findLocal(q.kind,q.id);
+      if(!local){ queue.shift(); qSave(); continue; }
+      setSync('saving');
+      try{
+        // optimistic concurrency: if someone else changed this record since we loaded it, do not blindly overwrite
+        const remote=await fsGet(q.kind,q.id);
+        if(remote && (remote.rev||0)>q.baseRev){
+          // conflict: keep the server's version, tell the user, never silently lose either side
+          upsertLocal(q.kind,remote); cacheSave();
+          queue.shift(); qSave();
+          if(typeof onConflict==='function') onConflict(q.kind,local,remote);
+          continue;
+        }
+        await fsSet(q.kind,local);
+        queue.shift(); qSave();
+      }catch(e){
+        setSync('error');
+        setTimeout(flushQueue,8000);       // retry later; queue is persisted so nothing is lost
+        return;
+      }
+    }
+  }while(flushAgain);
+  setSync('synced');
+}
+function flushQueue(){
+  if(flushPromise){ flushAgain=true; return flushPromise; }
+  const p=_flushBody().catch(e=>{ setSync('error'); });
+  flushPromise=p;
+  p.then(()=>{ if(flushPromise===p) flushPromise=null; });
+  return p;
+}
+let onConflict=null;
+function setConflictHandler(fn){ onConflict=fn; }
+
+/* Pull everything from the server and merge. A locally-queued (unsent) record always wins over the
+   server copy so we never clobber a pending edit with stale data. */
+let lastPull=0;
+async function pullAll(){
+  try{
+    const pending=new Set(queue.map(q=>q.kind+':'+q.id));
+    for(const k of KINDS){
+      const remote=await fsList(k);
+      const remoteIds=new Set(remote.map(r=>r.id));
+      remote.forEach(r=>{ if(!pending.has(k+':'+r.id)) upsertLocal(k,r); });
+      // records we have locally that the server doesn't and aren't pending: leave (could be mid-write)
+    }
+    cacheSave(); lastPull=Date.now();
+    if(!queue.length) setSync('synced');
+    return true;
+  }catch(e){ setSync('error'); return false; }
+}
+
+/* ---- activity log ---- */
+function logAction(who,text,siteId){
+  saveRecord('log',{id:uid(),who,text,siteId:siteId||'',at:Date.now()},who);
+}
+
+/* ---- live helpers used by the UI ---- */
+const active=k=>DB[k].filter(x=>!x.deleted);
+const expensesOf=sid=>DB.expenses.filter(x=>x.siteId===sid&&!x.deleted);
+const incomesOf=sid=>DB.incomes.filter(x=>x.siteId===sid&&!x.deleted);
+const settlementsOf=sid=>DB.settlements.filter(x=>x.siteId===sid&&!x.deleted);
+
+
+/* ════════════════════════════════════════════════════════════
+   UI — screens and forms. Depends on engine.js and store.js (inlined before this).
+   ════════════════════════════════════════════════════════════ */
+
+/* ---- auth: the three partners ---------------------------------------------------
+   NOTE: like your other apps, passwords live in this file. Anyone who can open the page source can
+   read them. Fine for a private link shared between three partners; do not reuse a bank password. */
+const USERS=[
+  {name:'Kanwar', password:'kanwar123', role:'admin'},
+  {name:'Baljot', password:'baljot123',     role:'admin'},
+  {name:'Nikshit',password:'nikshit123',    role:'admin'}
+];
+let ME=null;                       // logged-in user
+const isAdmin=()=>ME&&ME.role==='admin';
+
+/* ---- helpers ---- */
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const $=id=>document.getElementById(id);
+const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+const monthStr=()=>todayStr().slice(0,7);
+function inr(paise,opts){                 // paise -> "₹1,23,456"
+  const neg=paise<0; const n=Math.round(Math.abs(paise)/100);
+  const s=String(n); const last3=s.slice(-3), rest=s.slice(0,-3);
+  const f=(rest?rest.replace(/\B(?=(\d{2})+(?!\d))/g,',')+',':'')+last3;
+  return (neg?'−':(opts&&opts.plus&&paise>0?'+':''))+'₹'+f;
+}
+function fmtDate(d){ if(!d)return'—'; const [y,m,dd]=d.split('-'); const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${dd} ${mn[+m-1]} ${y}`; }
+function monthLabel(m){ if(!m)return''; const [y,mo]=m.split('-'); const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return mn[+mo-1]+' '+y; }
+function toast(msg,ms=2400){ const t=$('toast'); t.textContent=msg; t.style.opacity='1'; clearTimeout(t._t); t._t=setTimeout(()=>{t.style.opacity='0';},ms); }
+const partnerById=id=>DB.partners.find(p=>p.id===id);
+const pname=id=>{ const p=partnerById(id); return p?p.name:'(removed)'; };
+const siteById=id=>DB.sites.find(s=>s.id===id);
+const siteList=()=>active('sites').sort((a,b)=>(a.status==='Closed')-(b.status==='Closed')||a.name.localeCompare(b.name));
+const partnerList=()=>active('partners');
+
+/* ---- navigation ---- */
+let TAB='home', CUR_SITE=null, SITE_TAB='exp';
+function go(tab){ TAB=tab; CUR_SITE=null; render(); $('scroll').scrollTop=0; }
+function openSite(id,tab){ CUR_SITE=id; SITE_TAB=tab||'exp'; TAB='site'; render(); $('scroll').scrollTop=0; }
+
+function render(){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.tab===(TAB==='site'?'sites':TAB)));
+  const t=TAB;
+  $('pageTitle').textContent=t==='home'?'Dashboard':t==='sites'?'Sites':t==='site'?(siteById(CUR_SITE)?.name||'Site'):t==='reports'?'Reports':t==='partners'?'Partners':t==='log'?'Activity':'';
+  $('backBtn').style.display=(t==='site')?'flex':'none';
+  const el=$('view');
+  try{
+    el.innerHTML = t==='home'?viewHome():t==='sites'?viewSites():t==='site'?viewSite():t==='reports'?viewReports():t==='partners'?viewPartners():t==='log'?viewLog():'';
+  }catch(e){ console.error(e); el.innerHTML=`<div class="empty"><div class="emo">⚠️</div><p>Something went wrong showing this screen.<br><small>${esc(e.message)}</small></p></div>`; }
+}
+
+/* ════════════ MODAL ════════════ */
+function openModal(html){ $('modalBody').innerHTML=html; $('modal').classList.add('open'); }
+function closeModal(){ $('modal').classList.remove('open'); $('modalBody').innerHTML=''; }
+
+/* ════════════ LOGIN ════════════ */
+function doLogin(){
+  const pass=$('loginPass').value.trim(); const u=USERS.find(x=>x.password===pass);
+  if(!u){ $('loginErr').style.display='block'; return; }
+  $('loginErr').style.display='none'; ME=u;
+  try{ sessionStorage.setItem('sb_user',u.name); }catch(e){}
+  bootApp();
+}
+function doLogout(){ try{sessionStorage.removeItem('sb_user');}catch(e){} ME=null; $('app').style.display='none'; $('login').style.display='flex'; $('loginPass').value=''; }
+function bootApp(){
+  $('login').style.display='none'; $('app').style.display='flex'; $('who').textContent=ME.name;
+  cacheLoad(); render();
+  // Only seed founders after a SUCCESSFUL pull: if we're offline with an empty cache we must not write blank
+  // founder records over ones a partner has since filled in with phone / PAN / address.
+  pullAll().then(okPull=>{ if(okPull) ensureSelfPartner(); render(); });
+  flushQueue();
+}
+/* The three logins ARE the founding partners. They get FIXED ids, so if all three phones open the app for the
+   first time at the same instant they each write the same three documents (identical content) instead of each
+   inventing their own set. Only written when a founding partner is missing from the loaded data. */
+const FOUNDERS=USERS.map(u=>({id:'p_'+u.name.toLowerCase(),name:u.name}));
+function ensureSelfPartner(){
+  FOUNDERS.forEach(f=>{
+    const exists=DB.partners.some(p=>p.id===f.id);
+    if(!exists) saveRecord('partners',{id:f.id,name:f.name,phone:'',email:'',pan:'',address:'',login:f.name},ME.name);
+  });
+}
+
+/* ════════════ DASHBOARD ════════════ */
+function overallForRange(from,to){
+  const sites=siteList(); const eb={},ib={},sb={};
+  sites.forEach(s=>{eb[s.id]=expensesOf(s.id);ib[s.id]=incomesOf(s.id);sb[s.id]=settlementsOf(s.id);});
+  return computeOverall(sites,eb,ib,sb,{from,to});
+}
+function viewHome(){
+  const sites=siteList();
+  if(!sites.length) return `<div class="empty"><div class="emo">🏠</div><p>No sites yet.<br>Add your first rented property to start tracking.</p><button class="submit-btn" style="max-width:220px;margin:14px auto 0" onclick="openAddSite()">+ Add Site</button></div>`;
+  const m=monthStr(); const first=m+'-01', last=m+'-31';
+  const all=overallForRange('',''), mon=overallForRange(first,last);
+  const cls=v=>v>0?'g':v<0?'r':'';
+  let h=`<div class="hero">
+    <div class="hero-lbl">${monthLabel(m)} · all sites</div>
+    <div class="hero-val ${cls(mon.profit)}">${inr(mon.profit,{plus:true})}</div>
+    <div class="hero-sub">${mon.profit>=0?'Profit':'Loss'} this month</div>
+    <div class="hero-row"><div><b>${inr(mon.totalInc)}</b><span>Income</span></div><div><b>${inr(mon.totalExp)}</b><span>Expenses</span></div><div><b class="${cls(all.profit)}">${inr(all.profit,{plus:true})}</b><span>All-time</span></div></div>
+  </div>`;
+  // who owes whom overall
+  if(all.transfers.length){
+    h+=`<div class="sec-hdr">Pending settlement · all sites</div><div class="card">`+all.transfers.map(t=>`<div class="tr-row"><span><b>${esc(pname(t.from))}</b> pays <b>${esc(pname(t.to))}</b></span><span class="amt">${inr(t.amount)}</span></div>`).join('')+`</div>`;
+  } else if(sites.some(s=>expensesOf(s.id).length||incomesOf(s.id).length)){
+    h+=`<div class="card" style="text-align:center;color:var(--green);font-weight:700">✅ Everyone is settled up</div>`;
+  }
+  h+=`<div class="sec-hdr">Sites <button class="add-btn" onclick="openAddSite()">+ Add</button></div>`;
+  h+=all.per.map(({site,res})=>siteCard(site,res)).join('');
+  return h;
+}
+function siteCard(site,res){
+  const cls=res.profit>0?'g':res.profit<0?'r':'';
+  return `<div class="site-card" onclick="openSite('${site.id}')">
+    <div class="site-top"><div><div class="site-name">${esc(site.name)}</div><div class="site-loc">📍 ${esc(site.address||'—')}</div></div><div class="site-badge ${site.status==='Closed'?'closed':''}">${esc(site.status||'Active')}</div></div>
+    <div class="site-money3"><div><div class="v r">${inr(res.totalExp)}</div><div class="l">Expenses</div></div><div><div class="v g">${inr(res.totalInc)}</div><div class="l">Income</div></div><div><div class="v ${cls}">${inr(res.profit,{plus:true})}</div><div class="l">${res.profit<0?'Loss':'Profit'}</div></div></div>
+  </div>`;
+}
+
+/* ════════════ SITES LIST ════════════ */
+function viewSites(){
+  const sites=siteList();
+  let h=`<div class="sec-hdr">All Sites <button class="add-btn" onclick="openAddSite()">+ Add</button></div>`;
+  if(!sites.length) return h+`<div class="empty"><div class="emo">🏗️</div><p>No sites yet.</p></div>`;
+  const all=overallForRange('','');
+  return h+all.per.map(({site,res})=>siteCard(site,res)).join('');
+}
+
+/* ════════════ PARTNERS (master list) ════════════ */
+function viewPartners(){
+  const ps=partnerList();
+  let h=`<div class="sec-hdr">Partners <button class="add-btn" onclick="openPartnerForm()">+ Add</button></div>`;
+  h+=ps.map(p=>{
+    const inSites=siteList().filter(s=>(s.partners||[]).some(x=>x.pid===p.id));
+    return `<div class="card"><div style="display:flex;justify-content:space-between;gap:8px"><div><div style="font-weight:900;font-size:15px">${esc(p.name)}</div>
+      <div class="muted">${p.phone?'📞 '+esc(p.phone):''} ${p.email?' · ✉️ '+esc(p.email):''}</div>
+      ${p.pan?`<div class="muted">PAN: ${esc(p.pan)}</div>`:''}${p.address?`<div class="muted">${esc(p.address)}</div>`:''}
+      <div class="muted" style="margin-top:4px">${inSites.length?inSites.length+' site(s): '+inSites.map(s=>esc(s.name)).join(', '):'Not in any site yet'}</div></div>
+      <div><button class="mini-btn edit" onclick="openPartnerForm('${p.id}')">Edit</button></div></div></div>`;
+  }).join('')||`<div class="empty"><p>No partners yet.</p></div>`;
+  return h;
+}
+function openPartnerForm(id){
+  const p=id?partnerById(id):{};
+  openModal(`<div class="modal-title">${id?'✏️ Edit Partner':'➕ Add Partner'}</div>
+    <div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="pf_name" value="${esc(p.name||'')}"></div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="pf_phone" inputmode="tel" value="${esc(p.phone||'')}"></div><div class="form-group"><label class="form-label">Email</label><input class="form-input" id="pf_email" value="${esc(p.email||'')}"></div></div>
+    <div class="form-row"><div class="form-group"><label class="form-label">PAN</label><input class="form-input" id="pf_pan" value="${esc(p.pan||'')}"></div><div class="form-group"><label class="form-label">Aadhaar</label><input class="form-input" id="pf_aadhaar" value="${esc(p.aadhaar||'')}"></div></div>
+    <div class="form-group"><label class="form-label">Address</label><textarea class="form-textarea" id="pf_addr">${esc(p.address||'')}</textarea></div>
+    <button class="submit-btn" onclick="savePartnerForm('${id||''}')">Save</button><button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
+}
+function savePartnerForm(id){
+  const name=$('pf_name').value.trim(); if(!name){toast('Name is required');return;}
+  const dup=partnerList().find(p=>p.name.toLowerCase()===name.toLowerCase()&&p.id!==id);
+  if(dup){toast('A partner with this name already exists');return;}
+  const base=id?partnerById(id):{id:uid()};
+  saveRecord('partners',{...base,name,phone:$('pf_phone').value.trim(),email:$('pf_email').value.trim(),pan:$('pf_pan').value.trim(),aadhaar:$('pf_aadhaar').value.trim(),address:$('pf_addr').value.trim()},ME.name);
+  logAction(ME.name,(id?'Edited':'Added')+' partner '+name);
+  closeModal(); render(); toast('Saved');
+}
+
+/* ════════════ SITE: add / edit ════════════ */
+/* Split editor: rows of partner + percent. Used for both expense split and profit split. */
+function splitEditorHTML(prefix,shares,partnerIds){
+  const rows=partnerIds.map(pid=>{
+    const s=(shares||[]).find(x=>x.pid===pid); const v=s?s.pct:'';
+    return `<div class="split-row"><span class="split-name">${esc(pname(pid))}</span><input class="form-input split-in" type="number" step="0.01" min="0" inputmode="decimal" id="${prefix}_${pid}" value="${v}" oninput="updSplitTotal('${prefix}')"><span class="pct">%</span></div>`;
+  }).join('');
+  return `<div id="${prefix}_box">${rows}<div class="split-total" id="${prefix}_tot"></div></div>`;
+}
+function readSplit(prefix,partnerIds){ return partnerIds.map(pid=>({pid,pct:Number($(prefix+'_'+pid)?.value||0)})); }
+function updSplitTotal(prefix){
+  const box=$(prefix+'_box'); if(!box) return;
+  const ids=[...box.querySelectorAll('input')].map(i=>i.id.slice(prefix.length+1));
+  const t=pctTotal(readSplit(prefix,ids)); const el=$(prefix+'_tot'); if(!el) return;
+  const good=Math.abs(t-100)<0.001;
+  el.className='split-total '+(good?'ok':'bad'); el.textContent='Total: '+t+'%'+(good?' ✓':' — must be 100%');
+}
+function equalSplit(prefix){
+  const box=$(prefix+'_box'); const ins=[...box.querySelectorAll('input')]; const n=ins.length; if(!n)return;
+  let left=10000; ins.forEach((inp,i)=>{ const v=i===n-1?left:Math.floor(10000/n); inp.value=(v/100).toString(); left-=v; }); updSplitTotal(prefix);
+}
+let _siteDraft=null;
+function openAddSite(){ _siteDraft={partnerIds:[]}; openSiteForm(null); }
+function openSiteForm(id){
+  const s=id?siteById(id):null;
+  if(s) _siteDraft={partnerIds:(s.partners||[]).map(p=>p.pid)};
+  const ps=partnerList();
+  const sel=_siteDraft.partnerIds;
+  openModal(`<div class="modal-title">${s?'✏️ Edit Site':'🏠 Add Site'}</div>
+    <div class="form-group"><label class="form-label">Site / Property Name *</label><input class="form-input" id="sf_name" value="${esc(s?.name||'')}" placeholder="e.g. Sector 43 – Flat 5"></div>
+    <div class="form-group"><label class="form-label">Address</label><input class="form-input" id="sf_addr" value="${esc(s?.address||'')}"></div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Start Date</label><input type="date" class="form-input" id="sf_start" value="${s?.startDate||todayStr()}"></div><div class="form-group"><label class="form-label">Status</label><select class="form-select" id="sf_status"><option ${s?.status!=='Closed'?'selected':''}>Active</option><option ${s?.status==='Closed'?'selected':''}>Closed</option></select></div></div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Monthly Rent (₹)</label><input type="number" class="form-input" id="sf_rent" inputmode="decimal" value="${s?.monthlyRent||''}"></div><div class="form-group"><label class="form-label">Security Deposit (₹)</label><input type="number" class="form-input" id="sf_dep" inputmode="decimal" value="${s?.deposit||''}"></div></div>
+    <div class="form-label" style="margin-top:6px">Partners on this site *</div>
+    <div class="chips" id="sf_partners">${ps.map(p=>`<span class="pchip ${sel.includes(p.id)?'on':''}" onclick="toggleSitePartner('${p.id}')">${esc(p.name)}</span>`).join('')}<span class="pchip add" onclick="openPartnerForm()">+ New</span></div>
+    <div id="sf_splits"></div>
+    <button class="submit-btn" onclick="saveSiteForm('${id||''}')">Save Site</button><button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
+  renderSiteSplits(s);
+}
+function toggleSitePartner(pid){
+  captureSiteSplits();
+  const a=_siteDraft.partnerIds; const i=a.indexOf(pid); if(i>=0)a.splice(i,1); else a.push(pid);
+  document.querySelectorAll('#sf_partners .pchip:not(.add)').forEach(c=>{ const p=partnerList().find(x=>x.name===c.textContent); if(p) c.classList.toggle('on',a.includes(p.id)); });
+  renderSiteSplits(null);
+}
+let _splitCache={exp:null,prof:null,sameAsExp:true,rule:'pooled'};
+function captureSiteSplits(){
+  const ids=_siteDraft.partnerIds;
+  if($('sfe_box')) _splitCache.exp=readSplit('sfe',ids.filter(id=>$('sfe_'+id)));
+  if($('sfp_box')) _splitCache.prof=readSplit('sfp',ids.filter(id=>$('sfp_'+id)));
+  if($('sf_same')) _splitCache.sameAsExp=$('sf_same').checked;
+  if($('sf_rule')) _splitCache.rule=$('sf_rule').value;
+}
+function renderSiteSplits(s){
+  const ids=_siteDraft.partnerIds; const box=$('sf_splits'); if(!box) return;
+  if(s){ _splitCache={exp:s.expenseSplit,prof:s.profitSplit,sameAsExp:JSON.stringify(s.expenseSplit)===JSON.stringify(s.profitSplit),rule:s.profitRule||'pooled'}; }
+  if(!ids.length){ box.innerHTML='<div class="muted" style="margin:8px 0 14px">Pick the partners to set their shares.</div>'; return; }
+  box.innerHTML=`
+    <div class="form-label" style="margin-top:12px">Expense split (who bears costs) <button class="mini-btn edit" onclick="equalSplit('sfe')">Equal</button></div>
+    ${splitEditorHTML('sfe',_splitCache.exp,ids)}
+    <label class="chk" style="margin:12px 0 6px"><input type="checkbox" id="sf_same" ${_splitCache.sameAsExp?'checked':''} onchange="toggleProfitSplit()"> Profit is shared in the same ratio</label>
+    <div id="sf_profwrap" style="display:${_splitCache.sameAsExp?'none':'block'}">
+      <div class="form-label">Profit split <button class="mini-btn edit" onclick="equalSplit('sfp')">Equal</button></div>
+      ${splitEditorHTML('sfp',_splitCache.prof||_splitCache.exp,ids)}
+      <div class="form-label" style="margin-top:10px">How to settle when ratios differ</div>
+      <select class="form-select" id="sf_rule"><option value="pooled" ${_splitCache.rule!=='separate'?'selected':''}>Pool costs against income, then share the profit (recommended)</option><option value="separate" ${_splitCache.rule==='separate'?'selected':''}>Costs by expense ratio, income by profit ratio</option></select>
+    </div>`;
+  updSplitTotal('sfe'); if($('sfp_box')) updSplitTotal('sfp');
+}
+function toggleProfitSplit(){ const on=$('sf_same').checked; $('sf_profwrap').style.display=on?'none':'block'; }
+function saveSiteForm(id){
+  captureSiteSplits();
+  const name=$('sf_name').value.trim(); if(!name){toast('Site name is required');return;}
+  const ids=_siteDraft.partnerIds; if(!ids.length){toast('Add at least one partner');return;}
+  const exp=readSplit('sfe',ids); const v1=validateShares(exp); if(!v1.ok){toast('Expense split: '+v1.msg);return;}
+  let prof=exp, rule='pooled';
+  if(!$('sf_same').checked){ prof=readSplit('sfp',ids); const v2=validateShares(prof); if(!v2.ok){toast('Profit split: '+v2.msg);return;} rule=$('sf_rule').value; }
+  const existing=id?siteById(id):null;
+  // changing shares after entries exist: existing entries keep the split they were saved with; warn once
+  if(existing&&(expensesOf(id).length||incomesOf(id).length)&&(JSON.stringify(existing.expenseSplit)!==JSON.stringify(exp)||JSON.stringify(existing.profitSplit)!==JSON.stringify(prof))){
+    if(!confirm('Entries you already added keep the old split. Only NEW entries use these new percentages.\n\nProfit split changes apply to the whole site report. Continue?')) return;
+  }
+  const rec=saveRecord('sites',{...(existing||{id:uid()}),name,address:$('sf_addr').value.trim(),startDate:$('sf_start').value,status:$('sf_status').value,monthlyRent:Number($('sf_rent').value||0),deposit:Number($('sf_dep').value||0),partners:ids.map(pid=>({pid})),expenseSplit:exp,profitSplit:prof,profitRule:rule},ME.name);
+  logAction(ME.name,(existing?'Edited':'Created')+' site '+name,rec.id);
+  closeModal(); if(existing) render(); else openSite(rec.id); toast('Site saved');
+}
+
+/* ════════════ SITE PAGE ════════════ */
+function viewSite(){
+  const s=siteById(CUR_SITE); if(!s) return `<div class="empty"><p>Site not found.</p></div>`;
+  const res=computeSite(s,expensesOf(s.id),incomesOf(s.id),settlementsOf(s.id));
+  const cls=res.profit>0?'g':res.profit<0?'r':'';
+  let h=`<div class="hero small"><div class="hero-lbl">${esc(s.name)}</div><div class="hero-val ${cls}">${inr(res.profit,{plus:true})}</div><div class="hero-sub">${res.profit<0?'Loss':'Profit'} so far</div>
+    <div class="hero-row"><div><b>${inr(res.totalInc)}</b><span>Income</span></div><div><b>${inr(res.totalExp)}</b><span>Expenses</span></div><div><b>${inr(res.totalSetupExp)}</b><span>Setup cost</span></div></div></div>`;
+  h+=`<div class="tabs">${[['exp','Expenses'],['inc','Income'],['settle','Settle'],['rep','Report'],['setup','Split']].map(([k,l])=>`<div class="tab ${SITE_TAB===k?'on':''}" onclick="SITE_TAB='${k}';render()">${l}</div>`).join('')}</div>`;
+  if(SITE_TAB==='exp') h+=siteExpensesHTML(s);
+  else if(SITE_TAB==='inc') h+=siteIncomeHTML(s);
+  else if(SITE_TAB==='settle') h+=siteSettleHTML(s,res);
+  else if(SITE_TAB==='rep') h+=siteReportHTML(s,res);
+  else h+=siteSetupHTML(s);
+  return h;
+}
+function paidByText(lines){ return (lines||[]).map(l=>`${esc(pname(l.pid))} ${inr(toPaise(l.amount))}`).join(' + '); }
+
+function siteExpensesHTML(s){
+  const list=expensesOf(s.id).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
+  let h=`<div class="sec-hdr">Expenses (${list.length}) <button class="add-btn" onclick="openExpenseForm('${s.id}')">+ Expense</button></div>`;
+  if(!list.length) return h+`<div class="empty"><div class="emo">💸</div><p>No expenses yet.</p></div>`;
+  return h+list.map(e=>`<div class="entry" onclick="openExpenseForm('${s.id}','${e.id}')">
+    <div class="entry-l"><div class="entry-t">${esc(e.note||e.category||'Expense')}</div>
+      <div class="entry-s">${e.category?esc(e.category)+' · ':''}${e.vendor?esc(e.vendor)+' · ':''}${fmtDate(e.date)}${e.kind==='setup'?' · <b class="tagsetup">SETUP</b>':''}${e.split&&e.split.length?' · <b class="tagov">CUSTOM SPLIT</b>':''}</div>
+      <div class="entry-s">Paid by ${paidByText(e.paidBy)}</div></div><div class="entry-a r">${inr(toPaise(e.amount))}</div></div>`).join('');
+}
+function siteIncomeHTML(s){
+  const list=incomesOf(s.id).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
+  let h=`<div class="sec-hdr">Money received (${list.length}) <button class="add-btn" onclick="openIncomeForm('${s.id}')">+ Add</button></div>`;
+  if(!list.length) return h+`<div class="empty"><div class="emo">💰</div><p>No income yet.</p></div>`;
+  const kindLabel={booking:'Booking',capital:'Partner capital',refund:'Refund'};
+  return h+list.map(i=>`<div class="entry" onclick="openIncomeForm('${s.id}','${i.id}')">
+    <div class="entry-l"><div class="entry-t">${esc(i.note||i.source||kindLabel[i.kind]||'Income')}</div>
+      <div class="entry-s">${esc(kindLabel[i.kind]||'Booking')}${i.source?' · '+esc(i.source):''} · ${fmtDate(i.date)}</div>
+      <div class="entry-s">${i.kind==='capital'?'From '+paidByText(i.contributedBy)+' → held by ':'Received by '}${paidByText(i.receivedBy)}</div></div>
+    <div class="entry-a ${i.kind==='capital'?'b':'g'}">${inr(toPaise(i.amount))}</div></div>`).join('');
+}
+
+/* ---- expense form ---- */
+let _payLines=[], _recvLines=[], _contribLines=[];
+function linesEditorHTML(prefix,lines,partnerIds){
+  return `<div id="${prefix}_box">`+lines.map((l,i)=>`<div class="split-row"><select class="form-select" id="${prefix}_p${i}" style="flex:1.4">${partnerIds.map(pid=>`<option value="${pid}" ${l.pid===pid?'selected':''}>${esc(pname(pid))}</option>`).join('')}</select><input class="form-input" type="number" step="0.01" inputmode="decimal" id="${prefix}_a${i}" value="${l.amount||''}" placeholder="₹" style="flex:1" oninput="lineTotals('${prefix}')">${lines.length>1?`<button class="mini-btn del" onclick="removeLine('${prefix}',${i})">✕</button>`:''}</div>`).join('')+`</div><button class="mini-btn edit" onclick="addLine('${prefix}')" style="margin-top:4px">+ another partner</button><div class="split-total" id="${prefix}_tot"></div>`;
+}
+function readLines(prefix,n){ const out=[]; for(let i=0;i<n;i++){ const p=$(prefix+'_p'+i), a=$(prefix+'_a'+i); if(p&&a) out.push({pid:p.value,amount:Number(a.value||0)}); } return out; }
+function _lineArr(prefix){ return prefix==='pay'?_payLines:prefix==='rcv'?_recvLines:_contribLines; }
+function _setLineArr(prefix,v){ if(prefix==='pay')_payLines=v; else if(prefix==='rcv')_recvLines=v; else _contribLines=v; }
+function addLine(prefix){ const cur=readLines(prefix,_lineArr(prefix).length); const ids=(siteById(_formSite)?.partners||[]).map(p=>p.pid); const used=cur.map(l=>l.pid); const next=ids.find(i=>!used.includes(i))||ids[0]; cur.push({pid:next,amount:''}); _setLineArr(prefix,cur); refreshLines(prefix); }
+function removeLine(prefix,i){ const cur=readLines(prefix,_lineArr(prefix).length); cur.splice(i,1); _setLineArr(prefix,cur); refreshLines(prefix); }
+function refreshLines(prefix){ const ids=(siteById(_formSite)?.partners||[]).map(p=>p.pid); const box=$(prefix+'_wrap'); if(box){ box.innerHTML=linesEditorHTML(prefix,_lineArr(prefix),ids); lineTotals(prefix); } }
+function lineTotals(prefix){
+  const el=$(prefix+'_tot'); if(!el) return;
+  const tot=Number($('f_amount')?.value||0); const lines=readLines(prefix,_lineArr(prefix).length);
+  const sum=lines.reduce((a,l)=>a+toPaise(l.amount),0); const need=toPaise(tot);
+  const good=sum===need&&need>0;
+  el.className='split-total '+(good?'ok':'bad');
+  el.textContent=need? (good?'Adds up ✓':`Lines total ${inr(sum)} · need ${inr(need)}`) : '';
+}
+function onAmountInput(){ ['pay','rcv','ctb'].forEach(p=>{ if(_lineArr(p).length===1){ const a=$(p+'_a0'); if(a&&(!a.dataset.touched)) a.value=$('f_amount').value; } lineTotals(p); }); }
+let _formSite=null;
+function categoryOptions(){ const set=new Set(['Rent','Furniture','Electricity','Water','WiFi / Internet','Cleaning','Repairs','Maintenance','Supplies','Deposit','Commission','Other']); expensesOf(_formSite).forEach(e=>e.category&&set.add(e.category)); DB.expenses.forEach(e=>{if(!e.deleted&&e.category)set.add(e.category);}); return [...set].sort(); }
+
+function openExpenseForm(siteId,id){
+  _formSite=siteId; const s=siteById(siteId); const e=id?DB.expenses.find(x=>x.id===id):null;
+  const ids=s.partners.map(p=>p.pid);
+  _payLines=e?JSON.parse(JSON.stringify(e.paidBy||[])):[{pid:ids.includes(ME.name&&partnerList().find(p=>p.name===ME.name)?.id)?partnerList().find(p=>p.name===ME.name).id:ids[0],amount:''}];
+  const hasOv=!!(e&&e.split&&e.split.length);
+  const cats=categoryOptions();
+  openModal(`<div class="modal-title">${e?'✏️ Edit Expense':'💸 Add Expense'}</div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="f_date" value="${e?.date||todayStr()}"></div><div class="form-group"><label class="form-label">Amount (₹) *</label><input type="number" step="0.01" class="form-input" id="f_amount" inputmode="decimal" value="${e?.amount||''}" oninput="onAmountInput()"></div></div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Category</label><input class="form-input" list="catlist" id="f_cat" value="${esc(e?.category||'')}" placeholder="Rent, Furniture…"><datalist id="catlist">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div><div class="form-group"><label class="form-label">Paid to (vendor)</label><input class="form-input" id="f_vendor" value="${esc(e?.vendor||'')}"></div></div>
+    <div class="form-group"><label class="form-label">Type</label><select class="form-select" id="f_kind"><option value="run" ${e?.kind!=='setup'?'selected':''}>Running cost (rent, bills, cleaning…)</option><option value="setup" ${e?.kind==='setup'?'selected':''}>Setup / one-time (furniture, deposit, fit-out…)</option></select></div>
+    <div class="form-label">Paid by</div><div id="pay_wrap">${linesEditorHTML('pay',_payLines,ids)}</div>
+    <label class="chk" style="margin:14px 0 6px"><input type="checkbox" id="f_ov" ${hasOv?'checked':''} onchange="toggleOverride()"> Split this expense differently from the site default</label>
+    <div id="ov_wrap" style="display:${hasOv?'block':'none'}"><div class="muted" style="margin-bottom:6px">Site default: ${s.expenseSplit.map(x=>esc(pname(x.pid))+' '+x.pct+'%').join(' · ')}</div>${splitEditorHTML('ovs',hasOv?e.split:s.expenseSplit,ids)}</div>
+    <div class="form-group"><label class="form-label">Note</label><textarea class="form-textarea" id="f_note" placeholder="What was this for?">${esc(e?.note||'')}</textarea></div>
+    <div class="form-group"><label class="form-label">Bill / receipt photo (optional)</label><input type="file" accept="image/*" id="f_photo" onchange="pickReceipt(this)"><div id="f_photo_prev">${e?.receipt?`<img class="rc" src="${e.receipt}">`:''}</div></div>
+    <button class="submit-btn" onclick="saveExpense('${siteId}','${id||''}')">${e?'Update':'Save'}</button>
+    ${e?`<button class="cancel-btn danger" onclick="removeEntry('expenses','${id}')">Delete</button>`:''}<button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
+  lineTotals('pay'); if(hasOv) updSplitTotal('ovs');
+}
+function toggleOverride(){ $('ov_wrap').style.display=$('f_ov').checked?'block':'none'; if($('f_ov').checked) updSplitTotal('ovs'); }
+let _receipt='';
+async function pickReceipt(inp){
+  const f=inp.files[0]; if(!f) return;
+  try{ _receipt=await compressImage(f,900,0.72); $('f_photo_prev').innerHTML=`<img class="rc" src="${_receipt}">`; }catch(e){ toast('Could not read photo'); }
+}
+function compressImage(file,maxW,q){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=e=>{ const img=new Image(); img.onload=()=>{ const k=Math.min(maxW/img.width,maxW/img.height,1); const c=document.createElement('canvas'); c.width=img.width*k; c.height=img.height*k; c.getContext('2d').drawImage(img,0,0,c.width,c.height); res(c.toDataURL('image/jpeg',q)); }; img.onerror=rej; img.src=e.target.result; }; r.onerror=rej; r.readAsDataURL(file); }); }
+
+function saveExpense(siteId,id){
+  const s=siteById(siteId); const amount=Number($('f_amount').value||0); if(!(amount>0)){toast('Enter the amount');return;}
+  const date=$('f_date').value; if(!date){toast('Pick a date');return;}
+  const paidBy=readLines('pay',_payLines.length).filter(l=>l.amount>0);
+  const v=validateLines(paidBy,amount,'Paid by'); if(!v.ok){toast(v.msg);return;}
+  let split; if($('f_ov').checked){ const ids=s.partners.map(p=>p.pid); split=readSplit('ovs',ids); const vs=validateShares(split); if(!vs.ok){toast('Custom split: '+vs.msg);return;} split=split.filter(x=>x.pct>0); }
+  const old=id?DB.expenses.find(x=>x.id===id):null;
+  // `split` = explicit override (only when the box is ticked). `stampedSplit` = the site split in force TODAY,
+  // frozen onto the entry so later edits to the site's percentages never rewrite this entry.
+  const rec={...(old||{id:uid()}),siteId,date,amount,category:$('f_cat').value.trim(),vendor:$('f_vendor').value.trim(),kind:$('f_kind').value,paidBy,note:$('f_note').value.trim(),
+    split:split||null,
+    stampedSplit:(old&&old.stampedSplit&&old.stampedSplit.length&&!$('f_ov').checked)?old.stampedSplit:s.expenseSplit.map(x=>({pid:x.pid,pct:x.pct})),
+    receipt:_receipt||old?.receipt||''};
+  saveRecord('expenses',rec,ME.name); _receipt='';
+  logAction(ME.name,(old?'Edited':'Added')+' expense '+inr(toPaise(amount))+' — '+(rec.category||rec.note||''),siteId);
+  closeModal(); render(); toast(old?'Updated':'Expense saved');
+}
+function removeEntry(kind,id){
+  if(!confirm('Delete this entry? It will be removed from totals and logged.')) return;
+  const e=findLocal(kind,id); deleteRecord(kind,id,ME.name);
+  logAction(ME.name,'Deleted '+kind.slice(0,-1)+' '+inr(toPaise(e?.amount||0)),e?.siteId);
+  closeModal(); render(); toast('Deleted');
+}
+
+/* ---- income form ---- */
+function openIncomeForm(siteId,id){
+  _formSite=siteId; const s=siteById(siteId); const e=id?DB.incomes.find(x=>x.id===id):null;
+  const ids=s.partners.map(p=>p.pid); const me=partnerList().find(p=>p.name===ME.name)?.id;
+  _recvLines=e?JSON.parse(JSON.stringify(e.receivedBy||[])):[{pid:ids.includes(me)?me:ids[0],amount:''}];
+  _contribLines=e&&e.contributedBy?JSON.parse(JSON.stringify(e.contributedBy)):[{pid:ids.includes(me)?me:ids[0],amount:''}];
+  const kind=e?.kind||'booking';
+  openModal(`<div class="modal-title">${e?'✏️ Edit':'💰 Add'} Money Received</div>
+    <div class="form-group"><label class="form-label">What is it?</label><select class="form-select" id="f_ikind" onchange="onIncomeKind()">
+      <option value="booking" ${kind==='booking'?'selected':''}>Booking / rental income</option>
+      <option value="capital" ${kind==='capital'?'selected':''}>Partner capital (a partner handing money in)</option>
+      <option value="refund" ${kind==='refund'?'selected':''}>Refund (e.g. deposit returned)</option></select></div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="f_date" value="${e?.date||todayStr()}"></div><div class="form-group"><label class="form-label">Amount (₹) *</label><input type="number" step="0.01" class="form-input" id="f_amount" inputmode="decimal" value="${e?.amount||''}" oninput="onAmountInput()"></div></div>
+    <div class="form-group" id="src_wrap"><label class="form-label">Source</label><input class="form-input" list="srclist" id="f_source" value="${esc(e?.source||'')}" placeholder="Airbnb, Booking.com, Direct, Cash…"><datalist id="srclist"><option value="Airbnb"><option value="Booking.com"><option value="MakeMyTrip"><option value="Direct booking"><option value="Cash"></datalist></div>
+    <div id="ctb_section" style="display:${kind==='capital'?'block':'none'}"><div class="form-label">Contributed by</div><div id="ctb_wrap">${linesEditorHTML('ctb',_contribLines,ids)}</div></div>
+    <div class="form-label" id="rcv_lbl">${kind==='capital'?'Now held by':'Received by (whose account / cash)'}</div><div id="rcv_wrap">${linesEditorHTML('rcv',_recvLines,ids)}</div>
+    <div class="form-group" style="margin-top:12px"><label class="form-label">Note</label><textarea class="form-textarea" id="f_note" placeholder="Guest name, booking ref, month…">${esc(e?.note||'')}</textarea></div>
+    <button class="submit-btn" onclick="saveIncome('${siteId}','${id||''}')">${e?'Update':'Save'}</button>
+    ${e?`<button class="cancel-btn danger" onclick="removeEntry('incomes','${id}')">Delete</button>`:''}<button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
+  lineTotals('rcv'); lineTotals('ctb');
+}
+function onIncomeKind(){ const k=$('f_ikind').value; $('ctb_section').style.display=k==='capital'?'block':'none'; $('rcv_lbl').textContent=k==='capital'?'Now held by':'Received by (whose account / cash)'; $('src_wrap').style.display=k==='booking'?'block':'none'; }
+function saveIncome(siteId,id){
+  const kind=$('f_ikind').value; const amount=Number($('f_amount').value||0); if(!(amount>0)){toast('Enter the amount');return;}
+  const date=$('f_date').value; if(!date){toast('Pick a date');return;}
+  const receivedBy=readLines('rcv',_recvLines.length).filter(l=>l.amount>0);
+  const v=validateLines(receivedBy,amount,kind==='capital'?'Held by':'Received by'); if(!v.ok){toast(v.msg);return;}
+  let contributedBy;
+  if(kind==='capital'){ contributedBy=readLines('ctb',_contribLines.length).filter(l=>l.amount>0); const v2=validateLines(contributedBy,amount,'Contributed by'); if(!v2.ok){toast(v2.msg);return;} }
+  const old=id?DB.incomes.find(x=>x.id===id):null;
+  const rec={...(old||{id:uid()}),siteId,date,amount,kind,source:kind==='booking'?$('f_source').value.trim():'',receivedBy,contributedBy,note:$('f_note').value.trim()};
+  saveRecord('incomes',rec,ME.name);
+  logAction(ME.name,(old?'Edited':'Added')+' '+kind+' '+inr(toPaise(amount)),siteId);
+  closeModal(); render(); toast(old?'Updated':'Saved');
+}
+
+/* ---- settle tab ---- */
+function siteSettleHTML(s,res){
+  const nets={}; Object.values(res.partners).forEach(p=>nets[p.pid]=p.net);
+  const tr=settleUp(nets);
+  let h=`<div class="sec-hdr">Who owes whom</div><div class="card">`;
+  h+=Object.values(res.partners).map(p=>`<div class="tr-row"><span><b>${esc(pname(p.pid))}</b><div class="muted">${p.net>0?'is owed':p.net<0?'owes':'settled'}</div></span><span class="amt ${p.net>0?'g':p.net<0?'r':''}">${p.net===0?'₹0':inr(Math.abs(p.net))}</span></div>`).join('');
+  h+=`</div>`;
+  if(tr.length){
+    h+=`<div class="sec-hdr">Suggested payments</div><div class="card">`+tr.map(t=>`<div class="tr-row"><span><b>${esc(pname(t.from))}</b> → <b>${esc(pname(t.to))}</b></span><span class="amt">${inr(t.amount)}</span></div><div style="text-align:right;margin:-4px 0 8px"><button class="mini-btn edit" onclick="openSettlementForm('${s.id}','${t.from}','${t.to}',${t.amount/100})">Record as paid</button></div>`).join('')+`</div>`;
+  } else h+=`<div class="card" style="text-align:center;color:var(--green);font-weight:700">✅ Everyone is settled up on this site</div>`;
+  const sets=settlementsOf(s.id).sort((a,b)=>b.date.localeCompare(a.date));
+  h+=`<div class="sec-hdr">Settlement payments made <button class="add-btn" onclick="openSettlementForm('${s.id}')">+ Add</button></div>`;
+  h+=sets.length?sets.map(x=>`<div class="entry" onclick="openSettlementForm('${s.id}',null,null,null,'${x.id}')"><div class="entry-l"><div class="entry-t">${esc(pname(x.from))} → ${esc(pname(x.to))}</div><div class="entry-s">${fmtDate(x.date)}${x.note?' · '+esc(x.note):''}</div></div><div class="entry-a b">${inr(toPaise(x.amount))}</div></div>`).join(''):`<div class="muted" style="padding:6px 2px">None recorded yet.</div>`;
+  return h;
+}
+function openSettlementForm(siteId,from,to,amount,id){
+  const s=siteById(siteId); const ids=s.partners.map(p=>p.pid); const e=id?DB.settlements.find(x=>x.id===id):null;
+  const f=e?.from||from||ids[0], t=e?.to||to||ids[1]||ids[0];
+  openModal(`<div class="modal-title">${e?'✏️ Edit':'🤝 Record'} Settlement Payment</div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Paid by</label><select class="form-select" id="st_from">${ids.map(i=>`<option value="${i}" ${i===f?'selected':''}>${esc(pname(i))}</option>`).join('')}</select></div><div class="form-group"><label class="form-label">Paid to</label><select class="form-select" id="st_to">${ids.map(i=>`<option value="${i}" ${i===t?'selected':''}>${esc(pname(i))}</option>`).join('')}</select></div></div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="st_date" value="${e?.date||todayStr()}"></div><div class="form-group"><label class="form-label">Amount (₹) *</label><input type="number" step="0.01" class="form-input" id="st_amount" inputmode="decimal" value="${e?.amount||amount||''}"></div></div>
+    <div class="form-group"><label class="form-label">Note</label><input class="form-input" id="st_note" value="${esc(e?.note||'')}" placeholder="UPI, cash, cheque…"></div>
+    <button class="submit-btn" onclick="saveSettlement('${siteId}','${id||''}')">${e?'Update':'Save'}</button>
+    ${e?`<button class="cancel-btn danger" onclick="removeEntry('settlements','${id}')">Delete</button>`:''}<button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
+}
+function saveSettlement(siteId,id){
+  const from=$('st_from').value,to=$('st_to').value,amount=Number($('st_amount').value||0);
+  if(from===to){toast('Payer and receiver must be different');return;} if(!(amount>0)){toast('Enter the amount');return;}
+  const old=id?DB.settlements.find(x=>x.id===id):null;
+  saveRecord('settlements',{...(old||{id:uid()}),siteId,from,to,amount,date:$('st_date').value,note:$('st_note').value.trim()},ME.name);
+  logAction(ME.name,'Settlement '+pname(from)+' → '+pname(to)+' '+inr(toPaise(amount)),siteId);
+  closeModal(); render(); toast('Recorded');
+}
+
+/* ---- site setup tab (split summary + edit) ---- */
+function siteSetupHTML(s){
+  const same=JSON.stringify(s.expenseSplit)===JSON.stringify(s.profitSplit);
+  let h=`<div class="sec-hdr">Site setup <button class="add-btn" onclick="openSiteForm('${s.id}')">Edit</button></div><div class="card">
+    <div class="kv"><span>Address</span><b>${esc(s.address||'—')}</b></div><div class="kv"><span>Started</span><b>${fmtDate(s.startDate)}</b></div><div class="kv"><span>Status</span><b>${esc(s.status||'Active')}</b></div>
+    <div class="kv"><span>Monthly rent</span><b>${s.monthlyRent?inr(toPaise(s.monthlyRent)):'—'}</b></div><div class="kv"><span>Security deposit</span><b>${s.deposit?inr(toPaise(s.deposit)):'—'}</b></div></div>
+    <div class="sec-hdr">Expense split</div><div class="card">${s.expenseSplit.map(x=>`<div class="kv"><span>${esc(pname(x.pid))}</span><b>${x.pct}%</b></div>`).join('')}</div>
+    <div class="sec-hdr">Profit split ${same?'<span class="muted">(same as expenses)</span>':''}</div><div class="card">${s.profitSplit.map(x=>`<div class="kv"><span>${esc(pname(x.pid))}</span><b>${x.pct}%</b></div>`).join('')}${!same?`<div class="muted" style="margin-top:6px">Settlement rule: ${s.profitRule==='separate'?'costs by expense ratio, income by profit ratio':'costs pooled against income, profit shared by ratio'}</div>`:''}</div>`;
+  if(isAdmin()) h+=`<button class="cancel-btn danger" onclick="deleteSite('${s.id}')">Delete this site</button>`;
+  return h;
+}
+function deleteSite(id){
+  const s=siteById(id); const n=expensesOf(id).length+incomesOf(id).length+settlementsOf(id).length;
+  if(!confirm(`Delete "${s.name}"?${n?`\n\nIt has ${n} entries. They stay recoverable but disappear from all reports.`:''}`)) return;
+  deleteRecord('sites',id,ME.name); logAction(ME.name,'Deleted site '+s.name,id); go('sites'); toast('Site deleted');
+}
+
+/* ════════════════════════════════════════════════════════════
+   REPORTS — overall monthly P&L, site-wise P&L, partner statement, exports, activity log
+   ════════════════════════════════════════════════════════════ */
+
+/* ---- per-site report tab (inside a site) ---- */
+let _repFrom='', _repTo='';
+function siteReportHTML(s,_res){
+  const res=computeSite(s,expensesOf(s.id),incomesOf(s.id),settlementsOf(s.id),{from:_repFrom,to:_repTo});
+  const cls=res.profit>0?'g':res.profit<0?'r':'';
+  let h=`<div class="filters"><input type="date" class="form-input" value="${_repFrom}" onchange="_repFrom=this.value;render()"><span>to</span><input type="date" class="form-input" value="${_repTo}" onchange="_repTo=this.value;render()">${_repFrom||_repTo?`<button class="mini-btn del" onclick="_repFrom='';_repTo='';render()">Clear</button>`:''}</div>`;
+  h+=`<div class="card"><div class="kv"><span>Total income</span><b class="g">${inr(res.totalInc)}</b></div>
+    <div class="kv"><span>Running costs</span><b class="r">${inr(res.totalRunExp)}</b></div>
+    <div class="kv"><span>Setup / one-time costs</span><b class="r">${inr(res.totalSetupExp)}</b></div>
+    ${res.totalRefund?`<div class="kv"><span>Refunds received</span><b class="g">${inr(res.totalRefund)}</b></div>`:''}
+    <div class="kv total"><span>${res.profit<0?'Net loss':'Net profit'}</span><b class="${cls}">${inr(res.profit,{plus:true})}</b></div>
+    <div class="kv"><span>Profit before setup costs</span><b class="${res.runningProfit>=0?'g':'r'}">${inr(res.runningProfit,{plus:true})}</b></div>
+    ${res.totalCapital?`<div class="kv"><span>Partner capital put in</span><b class="b">${inr(res.totalCapital)}</b></div>`:''}</div>`;
+
+  // partner table
+  h+=`<div class="sec-hdr">Partner-wise</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Partner</th><th>Share</th><th>Paid out</th><th>Collected</th><th>Profit share</th><th>Net</th></tr></thead><tbody>`+
+    Object.values(res.partners).map(p=>{
+      const sp=(s.profitSplit||[]).find(x=>x.pid===p.pid);
+      return `<tr><td><b>${esc(pname(p.pid))}</b></td><td>${sp?sp.pct+'%':'—'}</td><td>${inr(p.paidOut)}</td><td>${inr(p.revHeld)}</td><td class="${(res.profitParts[p.pid]||0)>=0?'g':'r'}">${inr(res.profitParts[p.pid]||0,{plus:true})}</td><td class="${p.net>0?'g':p.net<0?'r':''}"><b>${p.net===0?'settled':(p.net>0?'gets ':'owes ')+inr(Math.abs(p.net))}</b></td></tr>`;
+    }).join('')+`</tbody></table></div>`;
+
+  // category
+  const cats=Object.entries(res.byCategory).sort((a,b)=>b[1]-a[1]);
+  if(cats.length){ const tot=cats.reduce((a,c)=>a+c[1],0);
+    h+=`<div class="sec-hdr">Where the money went</div><div class="card">`+cats.map(([c,v])=>`<div class="bar-row"><div class="bar-top"><span>${esc(c)}</span><b>${inr(v)} <small>${Math.round(v/tot*100)}%</small></b></div><div class="bar"><i style="width:${Math.max(2,v/tot*100)}%"></i></div></div>`).join('')+`</div>`; }
+
+  // monthly
+  if(res.byMonth.length){
+    h+=`<div class="sec-hdr">Month by month</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Month</th><th>Income</th><th>Expenses</th><th>Profit / Loss</th></tr></thead><tbody>`+
+    res.byMonth.map(m=>{const p=m.inc-m.exp; return `<tr><td><b>${monthLabel(m.month)}</b></td><td class="g">${inr(m.inc)}</td><td class="r">${inr(m.exp)}</td><td class="${p>=0?'g':'r'}"><b>${inr(p,{plus:true})}</b></td></tr>`;}).join('')+`</tbody></table></div>`;
+  }
+  h+=`<div class="btn-row"><button class="site-btn share" onclick="exportSitePDF('${s.id}')">📄 PDF</button><button class="site-btn pay" onclick="exportXLSX('${s.id}')">📊 Excel</button></div>`;
+  return h;
+}
+
+/* ---- top-level Reports tab ---- */
+let REP='month', REP_YEAR=new Date().getFullYear(), REP_PARTNER='';
+function viewReports(){
+  const tabs=[['month','Monthly P&L'],['site','Site-wise'],['partner','Partner']];
+  let h=`<div class="tabs">${tabs.map(([k,l])=>`<div class="tab ${REP===k?'on':''}" onclick="REP='${k}';render()">${l}</div>`).join('')}</div>`;
+  if(!siteList().length) return h+`<div class="empty"><div class="emo">📊</div><p>Add a site and some entries to see reports.</p></div>`;
+  if(REP==='month') h+=repMonthly(); else if(REP==='site') h+=repSites(); else h+=repPartner();
+  return h;
+}
+
+/* Overall monthly P&L: every site combined, month by month, with a site breakdown per month */
+function repMonthly(){
+  const sites=siteList();
+  const years=new Set([new Date().getFullYear()]);
+  DB.expenses.concat(DB.incomes).forEach(x=>{ if(!x.deleted&&x.date) years.add(+x.date.slice(0,4)); });
+  const ys=[...years].sort();
+  let h=`<div class="filters"><select class="form-select" onchange="REP_YEAR=+this.value;render()">${ys.map(y=>`<option ${y===REP_YEAR?'selected':''}>${y}</option>`).join('')}</select></div>`;
+  const o=overallForRange(REP_YEAR+'-01-01',REP_YEAR+'-12-31');
+  const months=o.byMonth;
+  const totInc=months.reduce((a,m)=>a+m.inc,0), totExp=months.reduce((a,m)=>a+m.exp,0), totProfit=totInc-totExp;
+  h+=`<div class="card"><div class="kv"><span>Income ${REP_YEAR}</span><b class="g">${inr(totInc)}</b></div><div class="kv"><span>Expenses ${REP_YEAR}</span><b class="r">${inr(totExp)}</b></div><div class="kv total"><span>${totProfit<0?'Loss':'Profit'} ${REP_YEAR}</span><b class="${totProfit>=0?'g':'r'}">${inr(totProfit,{plus:true})}</b></div></div>`;
+  if(!months.length) return h+`<div class="empty"><p>No entries in ${REP_YEAR}.</p></div>`;
+  // bar chart
+  const max=Math.max(...months.map(m=>Math.max(m.inc,m.exp)),1);
+  h+=`<div class="sec-hdr">Income vs Expenses</div><div class="card"><div class="chart">`+months.map(m=>`<div class="ccol"><div class="cbars"><i class="ci" style="height:${m.inc/max*100}%"></i><i class="ce" style="height:${m.exp/max*100}%"></i></div><div class="clbl">${monthLabel(m.month).slice(0,3)}</div></div>`).join('')+`</div><div class="legend"><span><i class="ci"></i>Income</span><span><i class="ce"></i>Expenses</span></div></div>`;
+  h+=`<div class="sec-hdr">Month by month</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Month</th><th>Income</th><th>Expenses</th><th>Profit / Loss</th></tr></thead><tbody>`+
+    months.map(m=>{const p=m.inc-m.exp; return `<tr onclick="REP_MONTH='${m.month}';openMonthDetail('${m.month}')" style="cursor:pointer"><td><b>${monthLabel(m.month)}</b></td><td class="g">${inr(m.inc)}</td><td class="r">${inr(m.exp)}</td><td class="${p>=0?'g':'r'}"><b>${inr(p,{plus:true})}</b></td></tr>`;}).join('')+
+    `<tr class="totrow"><td><b>Total</b></td><td class="g"><b>${inr(totInc)}</b></td><td class="r"><b>${inr(totExp)}</b></td><td class="${totProfit>=0?'g':'r'}"><b>${inr(totProfit,{plus:true})}</b></td></tr></tbody></table></div><div class="muted" style="margin:6px 2px">Tap a month to see it site by site.</div>`;
+  h+=`<div class="btn-row"><button class="site-btn share" onclick="exportOverallPDF()">📄 PDF</button><button class="site-btn pay" onclick="exportXLSX('all')">📊 Excel</button></div>`;
+  return h;
+}
+let REP_MONTH='';
+function openMonthDetail(m){
+  const rows=siteList().map(s=>{ const r=computeSite(s,expensesOf(s.id),incomesOf(s.id),settlementsOf(s.id),{from:m+'-01',to:m+'-31'}); const p=r.totalInc-r.totalExp; return {s,inc:r.totalInc,exp:r.totalExp,p}; }).filter(x=>x.inc||x.exp);
+  const ti=rows.reduce((a,x)=>a+x.inc,0), te=rows.reduce((a,x)=>a+x.exp,0);
+  openModal(`<div class="modal-title">${monthLabel(m)}</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Site</th><th>Income</th><th>Expenses</th><th>P / L</th></tr></thead><tbody>`+
+    rows.map(x=>`<tr><td><b>${esc(x.s.name)}</b></td><td class="g">${inr(x.inc)}</td><td class="r">${inr(x.exp)}</td><td class="${x.p>=0?'g':'r'}"><b>${inr(x.p,{plus:true})}</b></td></tr>`).join('')+
+    `<tr class="totrow"><td><b>Total</b></td><td class="g"><b>${inr(ti)}</b></td><td class="r"><b>${inr(te)}</b></td><td class="${ti-te>=0?'g':'r'}"><b>${inr(ti-te,{plus:true})}</b></td></tr></tbody></table></div><button class="cancel-btn" onclick="closeModal()">Close</button>`);
+}
+
+/* Site-wise P&L: one row per site, sortable, date range */
+let SITE_SORT='profit';
+function repSites(){
+  let h=`<div class="filters"><input type="date" class="form-input" value="${_repFrom}" onchange="_repFrom=this.value;render()"><span>to</span><input type="date" class="form-input" value="${_repTo}" onchange="_repTo=this.value;render()">${_repFrom||_repTo?`<button class="mini-btn del" onclick="_repFrom='';_repTo='';render()">Clear</button>`:''}</div>`;
+  const o=overallForRange(_repFrom,_repTo);
+  const rows=o.per.map(({site,res})=>({site,res}));
+  rows.sort((a,b)=>SITE_SORT==='name'?a.site.name.localeCompare(b.site.name):SITE_SORT==='income'?b.res.totalInc-a.res.totalInc:SITE_SORT==='exp'?b.res.totalExp-a.res.totalExp:b.res.profit-a.res.profit);
+  h+=`<div class="card"><div class="kv"><span>Total income</span><b class="g">${inr(o.totalInc)}</b></div><div class="kv"><span>Total expenses</span><b class="r">${inr(o.totalExp)}</b></div><div class="kv total"><span>${o.profit<0?'Overall loss':'Overall profit'}</span><b class="${o.profit>=0?'g':'r'}">${inr(o.profit,{plus:true})}</b></div></div>`;
+  h+=`<div class="filters" style="margin-top:8px"><span>Sort:</span><select class="form-select" onchange="SITE_SORT=this.value;render()"><option value="profit" ${SITE_SORT==='profit'?'selected':''}>Profit (high → low)</option><option value="income" ${SITE_SORT==='income'?'selected':''}>Income</option><option value="exp" ${SITE_SORT==='exp'?'selected':''}>Expenses</option><option value="name" ${SITE_SORT==='name'?'selected':''}>Name</option></select></div>`;
+  h+=`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Site</th><th>Income</th><th>Expenses</th><th>Profit / Loss</th></tr></thead><tbody>`+
+    rows.map(({site,res})=>`<tr onclick="openSite('${site.id}','rep')" style="cursor:pointer"><td><b>${esc(site.name)}</b><div class="muted">${esc(site.status||'Active')}</div></td><td class="g">${inr(res.totalInc)}</td><td class="r">${inr(res.totalExp)}</td><td class="${res.profit>=0?'g':'r'}"><b>${inr(res.profit,{plus:true})}</b></td></tr>`).join('')+
+    `<tr class="totrow"><td><b>Total</b></td><td class="g"><b>${inr(o.totalInc)}</b></td><td class="r"><b>${inr(o.totalExp)}</b></td><td class="${o.profit>=0?'g':'r'}"><b>${inr(o.profit,{plus:true})}</b></td></tr></tbody></table></div>`;
+  h+=`<div class="btn-row"><button class="site-btn share" onclick="exportOverallPDF()">📄 PDF</button><button class="site-btn pay" onclick="exportXLSX('all')">📊 Excel</button></div>`;
+  return h;
+}
+
+/* Partner statement: across all sites, what this partner paid, collected, is owed */
+function repPartner(){
+  const ps=partnerList(); if(!REP_PARTNER||!ps.find(p=>p.id===REP_PARTNER)) REP_PARTNER=(ps.find(p=>p.name===ME.name)||ps[0]||{}).id||'';
+  let h=`<div class="filters"><select class="form-select" onchange="REP_PARTNER=this.value;render()">${ps.map(p=>`<option value="${p.id}" ${p.id===REP_PARTNER?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>`;
+  const o=overallForRange('','');
+  const rows=o.per.filter(({res})=>res.partners[REP_PARTNER]).map(({site,res})=>({site,res,p:res.partners[REP_PARTNER],share:res.profitParts[REP_PARTNER]||0}));
+  if(!rows.length) return h+`<div class="empty"><p>${esc(pname(REP_PARTNER))} isn't on any site yet.</p></div>`;
+  const tot=(f)=>rows.reduce((a,r)=>a+f(r),0);
+  const net=tot(r=>r.p.net);
+  h+=`<div class="hero small"><div class="hero-lbl">${esc(pname(REP_PARTNER))} · all sites</div><div class="hero-val ${net>0?'g':net<0?'r':''}">${net===0?'Settled':(net>0?'Is owed ':'Owes ')+inr(Math.abs(net))}</div>
+    <div class="hero-row"><div><b>${inr(tot(r=>r.p.paidOut))}</b><span>Paid out</span></div><div><b>${inr(tot(r=>r.p.revHeld))}</b><span>Collected</span></div><div><b>${inr(tot(r=>r.share),{plus:true})}</b><span>Profit share</span></div></div></div>`;
+  h+=`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Site</th><th>Paid</th><th>Collected</th><th>Profit share</th><th>Net</th></tr></thead><tbody>`+
+    rows.map(r=>`<tr onclick="openSite('${r.site.id}','settle')" style="cursor:pointer"><td><b>${esc(r.site.name)}</b></td><td>${inr(r.p.paidOut)}</td><td>${inr(r.p.revHeld)}</td><td class="${r.share>=0?'g':'r'}">${inr(r.share,{plus:true})}</td><td class="${r.p.net>0?'g':r.p.net<0?'r':''}"><b>${r.p.net===0?'settled':inr(r.p.net,{plus:true})}</b></td></tr>`).join('')+`</tbody></table></div>`;
+  if(o.transfers.length) h+=`<div class="sec-hdr">Overall settlement (all sites)</div><div class="card">`+o.transfers.map(t=>`<div class="tr-row"><span><b>${esc(pname(t.from))}</b> pays <b>${esc(pname(t.to))}</b></span><span class="amt">${inr(t.amount)}</span></div>`).join('')+`</div>`;
+  return h;
+}
+
+/* ════════════ ACTIVITY LOG ════════════ */
+function viewLog(){
+  const rows=DB.log.slice().sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,200);
+  let h=`<div class="sec-hdr">Recent activity</div>`;
+  if(!rows.length) return h+`<div class="empty"><p>Nothing yet.</p></div>`;
+  return h+rows.map(l=>{ const d=new Date(l.at||0); const ts=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); const s=l.siteId?siteById(l.siteId):null;
+    return `<div class="entry"><div class="entry-l"><div class="entry-t">${esc(l.text)}</div><div class="entry-s"><b>${esc(l.who)}</b> · ${ts}${s?' · '+esc(s.name):''}</div></div></div>`; }).join('');
+}
+
+/* ════════════ EXPORTS ════════════ */
+function pdfMoney(paise){ const n=Math.round(Math.abs(paise)/100); const s=String(n); const l3=s.slice(-3), r=s.slice(0,-3); return (paise<0?'-':'')+'Rs. '+(r?r.replace(/\B(?=(\d{2})+(?!\d))/g,',')+',':'')+l3; }
+function fmtDPdf(d){ return fmtDate(d).replace(/ /g,'-'); }
+
+function makePDF(sitesToShow,title,from,to){
+  if(!window.jspdf||!window.jspdf.jsPDF){ alert('PDF library did not load. Check your internet connection and try again.'); return null; }
+  const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'mm',format:'a4'});
+  const PW=210,PH=297,ML=14,MR=196,CW=MR-ML;
+  const O=[240,90,0],DARK=[28,29,46],MUT=[148,150,176],WHITE=[255,255,255],LIGHT=[247,248,252],GREEN=[22,160,106],RED=[224,53,53],BDR=[220,224,240];
+  let pageNum=0;
+  function addPage(){ if(pageNum>0)doc.addPage(); pageNum++;
+    doc.setFillColor(...O);doc.rect(0,0,PW,20,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...WHITE);doc.text('K.D CONSTRUCTIONS',ML,8);
+    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.text('Partnership Ledger',ML,13.5);
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text(title.toUpperCase(),MR,8,{align:'right'});
+    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.text('Generated: '+new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})+' by '+ME.name,MR,13.5,{align:'right'});
+    doc.setTextColor(...MUT);doc.setFontSize(7);doc.text('Page '+pageNum,MR,PH-6,{align:'right'}); return 28; }
+  const checkY=(y,need=10)=>{ if(y+need>PH-14) y=addPage(); return y; };
+  const hr=(y,col=BDR)=>{ doc.setDrawColor(...col);doc.setLineWidth(0.25);doc.line(ML,y,MR,y);return y+1; };
+  let y=addPage();
+  const period=(from||to)?('Period: '+(from?fmtDPdf(from):'start')+' to '+(to?fmtDPdf(to):'today')):'Period: all time';
+
+  // overall summary when more than one site
+  if(sitesToShow.length>1){
+    const eb={},ib={},sb={}; sitesToShow.forEach(s=>{eb[s.id]=expensesOf(s.id);ib[s.id]=incomesOf(s.id);sb[s.id]=settlementsOf(s.id);});
+    const o=computeOverall(sitesToShow,eb,ib,sb,{from,to});
+    doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(...DARK);doc.text('Overall Profit & Loss',ML,y);y+=5;
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...MUT);doc.text(period,ML,y);y+=6;y=hr(y);y+=3;
+    const box=(label,val,col,i)=>{ const bw=CW/3-2,bx=ML+i*(bw+3); doc.setLineWidth(0.25);doc.setDrawColor(...BDR);doc.setFillColor(...LIGHT);doc.rect(bx,y,bw,20,'FD'); doc.setDrawColor(...col);doc.setLineWidth(1.2);doc.line(bx,y,bx+bw,y);doc.setLineWidth(0.25); doc.setFont('helvetica','bold');doc.setFontSize(6);doc.setTextColor(...MUT);doc.text(label,bx+bw/2,y+6,{align:'center'}); doc.setFontSize(10);doc.setTextColor(...col);doc.text(pdfMoney(val),bx+bw/2,y+14,{align:'center'}); };
+    box('TOTAL INCOME',o.totalInc,GREEN,0); box('TOTAL EXPENSES',o.totalExp,RED,1); box(o.profit<0?'NET LOSS':'NET PROFIT',o.profit,o.profit>=0?GREEN:RED,2); y+=27;
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...DARK);doc.text('Site-wise',ML,y);y+=2;y=hr(y,O);y+=3;
+    doc.setFillColor(...O);doc.rect(ML,y-1,CW,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...WHITE);doc.text('Site',ML+1,y+4);doc.text('Income',ML+95,y+4,{align:'right'});doc.text('Expenses',ML+135,y+4,{align:'right'});doc.text('Profit / Loss',MR-1,y+4,{align:'right'});y+=9;
+    let alt=false; o.per.forEach(({site,res})=>{ y=checkY(y,8); if(alt){doc.setFillColor(...LIGHT);doc.rect(ML,y-1,CW,7,'F');} alt=!alt; doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...DARK);doc.text(doc.splitTextToSize(site.name,70)[0],ML+1,y+4);doc.setTextColor(...GREEN);doc.text(pdfMoney(res.totalInc),ML+95,y+4,{align:'right'});doc.setTextColor(...RED);doc.text(pdfMoney(res.totalExp),ML+135,y+4,{align:'right'});doc.setFont('helvetica','bold');doc.setTextColor(...(res.profit>=0?GREEN:RED));doc.text(pdfMoney(res.profit),MR-1,y+4,{align:'right'});y+=7; });
+    // monthly
+    if(o.byMonth.length){ y=checkY(y,30); y+=6; doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...DARK);doc.text('Month by month',ML,y);y+=2;y=hr(y,O);y+=3;
+      doc.setFillColor(...O);doc.rect(ML,y-1,CW,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...WHITE);doc.text('Month',ML+1,y+4);doc.text('Income',ML+95,y+4,{align:'right'});doc.text('Expenses',ML+135,y+4,{align:'right'});doc.text('Profit / Loss',MR-1,y+4,{align:'right'});y+=9;
+      alt=false; o.byMonth.forEach(m=>{ y=checkY(y,8); if(alt){doc.setFillColor(...LIGHT);doc.rect(ML,y-1,CW,7,'F');} alt=!alt; const p=m.inc-m.exp; doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...DARK);doc.text(monthLabel(m.month),ML+1,y+4);doc.setTextColor(...GREEN);doc.text(pdfMoney(m.inc),ML+95,y+4,{align:'right'});doc.setTextColor(...RED);doc.text(pdfMoney(m.exp),ML+135,y+4,{align:'right'});doc.setFont('helvetica','bold');doc.setTextColor(...(p>=0?GREEN:RED));doc.text(pdfMoney(p),MR-1,y+4,{align:'right'});y+=7; }); }
+    if(o.transfers.length){ y=checkY(y,30); y+=6; doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...DARK);doc.text('Settlement due (all sites)',ML,y);y+=2;y=hr(y,O);y+=4; o.transfers.forEach(t=>{ y=checkY(y,7); doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...DARK);doc.text(pname(t.from)+'  pays  '+pname(t.to),ML+1,y); doc.setFont('helvetica','bold');doc.text(pdfMoney(t.amount),MR-1,y,{align:'right'}); y+=6; }); }
+  }
+
+  sitesToShow.forEach((site,idx)=>{
+    if(sitesToShow.length>1||idx>0) y=addPage();
+    const res=computeSite(site,expensesOf(site.id),incomesOf(site.id),settlementsOf(site.id),{from,to});
+    doc.setFillColor(...LIGHT);doc.rect(ML,y-2,CW,10,'F');doc.setDrawColor(...BDR);doc.setLineWidth(0.3);doc.rect(ML,y-2,CW,10,'S');
+    doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...DARK);doc.text(site.name,ML+3,y+5);y+=12;
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...MUT);doc.text((site.address?site.address+'  |  ':'')+period,ML,y);y+=7;y=hr(y);y+=3;
+    const bw=CW/4-2;
+    [['INCOME',res.totalInc,GREEN],['EXPENSES',res.totalExp,RED],[res.profit<0?'LOSS':'PROFIT',res.profit,res.profit>=0?GREEN:RED],['SETUP COST',res.totalSetupExp,O]].forEach(([l,v,c],i)=>{ const bx=ML+i*(bw+2.7); doc.setLineWidth(0.25);doc.setDrawColor(...BDR);doc.setFillColor(...LIGHT);doc.rect(bx,y,bw,20,'FD');doc.setDrawColor(...c);doc.setLineWidth(1.2);doc.line(bx,y,bx+bw,y);doc.setLineWidth(0.25);doc.setFont('helvetica','bold');doc.setFontSize(6);doc.setTextColor(...MUT);doc.text(l,bx+bw/2,y+6,{align:'center'});doc.setFontSize(v>=100000000?7:9);doc.setTextColor(...c);doc.text(pdfMoney(v),bx+bw/2,y+14,{align:'center'}); }); y+=27;
+
+    // partner table
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...DARK);doc.text('Partners — who paid, who owes',ML,y);y+=2;y=hr(y,O);y+=3;
+    doc.setFillColor(...O);doc.rect(ML,y-1,CW,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(...WHITE);
+    doc.text('Partner',ML+1,y+4);doc.text('Profit %',ML+50,y+4,{align:'right'});doc.text('Paid out',ML+80,y+4,{align:'right'});doc.text('Collected',ML+110,y+4,{align:'right'});doc.text('Profit share',ML+142,y+4,{align:'right'});doc.text('Net',MR-1,y+4,{align:'right'});y+=9;
+    let alt=false; Object.values(res.partners).forEach(p=>{ y=checkY(y,8); if(alt){doc.setFillColor(...LIGHT);doc.rect(ML,y-1,CW,7,'F');} alt=!alt; const sp=(site.profitSplit||[]).find(x=>x.pid===p.pid); const ps=res.profitParts[p.pid]||0;
+      doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...DARK);doc.text(pname(p.pid),ML+1,y+4);
+      doc.setFont('helvetica','normal');doc.text(sp?sp.pct+'%':'-',ML+50,y+4,{align:'right'});doc.text(pdfMoney(p.paidOut),ML+80,y+4,{align:'right'});doc.text(pdfMoney(p.revHeld),ML+110,y+4,{align:'right'});
+      doc.setTextColor(...(ps>=0?GREEN:RED));doc.text(pdfMoney(ps),ML+142,y+4,{align:'right'});
+      doc.setFont('helvetica','bold');doc.setTextColor(...(p.net>0?GREEN:p.net<0?RED:MUT));doc.text(p.net===0?'Settled':(p.net>0?'Gets ':'Owes ')+pdfMoney(Math.abs(p.net)),MR-1,y+4,{align:'right'});y+=7; });
+    const tr=settleUp(Object.fromEntries(Object.values(res.partners).map(p=>[p.pid,p.net])));
+    if(tr.length){ y+=3; doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...DARK);doc.text('To settle:',ML+1,y);y+=5; tr.forEach(t=>{ y=checkY(y,6); doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text(pname(t.from)+'  pays  '+pname(t.to)+'   '+pdfMoney(t.amount),ML+4,y);y+=5; }); }
+    y+=4;
+
+    // ledger
+    y=checkY(y,25); doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...DARK);doc.text('Complete Ledger',ML,y);y+=2;y=hr(y,O);y+=3;
+    doc.setFillColor(...O);doc.rect(ML,y-1,CW,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...WHITE);doc.text('Date',ML+1,y+4);doc.text('Type',ML+24,y+4);doc.text('Description',ML+44,y+4);doc.text('Amount',MR-1,y+4,{align:'right'});y+=9;
+    const inR=d=>(!from||d>=from)&&(!to||d<=to);
+    const entries=[...expensesOf(site.id).filter(e=>inR(e.date)).map(e=>({d:e.date,t:e.kind==='setup'?'SETUP':'EXPENSE',amt:e.amount,desc:[e.note,e.category,e.vendor?'to '+e.vendor:'','paid by '+(e.paidBy||[]).map(l=>pname(l.pid)).join('+')].filter(Boolean).join(' · '),c:RED})),
+      ...incomesOf(site.id).filter(e=>inR(e.date)).map(e=>({d:e.date,t:e.kind==='capital'?'CAPITAL':e.kind==='refund'?'REFUND':'INCOME',amt:e.amount,desc:[e.note,e.source,(e.kind==='capital'?'from '+(e.contributedBy||[]).map(l=>pname(l.pid)).join('+')+' to be held by ':'recd by ')+(e.receivedBy||[]).map(l=>pname(l.pid)).join('+')].filter(Boolean).join(' · '),c:GREEN})),
+      ...settlementsOf(site.id).filter(e=>inR(e.date)).map(e=>({d:e.date,t:'SETTLE',amt:e.amount,desc:pname(e.from)+' paid '+pname(e.to)+(e.note?' · '+e.note:''),c:[43,110,240]}))].sort((a,b)=>a.d.localeCompare(b.d));
+    alt=false; entries.forEach(e=>{ y=checkY(y,8); if(alt){doc.setFillColor(...LIGHT);doc.rect(ML,y-1,CW,7,'F');} alt=!alt; doc.setFont('helvetica','normal');doc.setFontSize(7.2);doc.setTextColor(...DARK);doc.text(fmtDPdf(e.d),ML+1,y+4); doc.setFont('helvetica','bold');doc.setFontSize(6.6);doc.setTextColor(...e.c);doc.text(e.t,ML+24,y+4); doc.setFont('helvetica','normal');doc.setFontSize(7.2);doc.setTextColor(...DARK);doc.text(doc.splitTextToSize(e.desc||'-',108)[0],ML+44,y+4); doc.setFont('helvetica','bold');doc.setTextColor(...e.c);doc.text(pdfMoney(toPaise(e.amt)),MR-1,y+4,{align:'right'});doc.setDrawColor(...BDR);doc.setLineWidth(0.15);doc.line(ML,y+6,MR,y+6);y+=7; });
+  });
+  return doc;
+}
+async function shareOrSave(doc,name){
+  const blob=doc.output('blob'); const file=new File([blob],name,{type:'application/pdf'});
+  try{ if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({title:name,files:[file]}); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+async function exportSitePDF(id){ const s=siteById(id); const doc=makePDF([s],'Site Ledger Report',_repFrom,_repTo); if(doc) await shareOrSave(doc,'Ledger_'+s.name.replace(/[^a-z0-9]+/gi,'_')+'.pdf'); }
+async function exportOverallPDF(){ const doc=makePDF(siteList(),'Profit & Loss Report',_repFrom,_repTo); if(doc) await shareOrSave(doc,'PL_Report_'+todayStr()+'.pdf'); }
+
+function exportXLSX(which){
+  if(!window.XLSX){ alert('Excel library did not load. Check your internet connection and try again.'); return; }
+  const sites=which==='all'?siteList():[siteById(which)];
+  const wb=XLSX.utils.book_new();
+  const summary=[['Site','Income','Expenses','Setup cost','Profit / Loss']];
+  sites.forEach(s=>{ const r=computeSite(s,expensesOf(s.id),incomesOf(s.id),settlementsOf(s.id),{from:_repFrom,to:_repTo}); summary.push([s.name,r.totalInc/100,r.totalExp/100,r.totalSetupExp/100,r.profit/100]); });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(summary),'Summary');
+  const ledger=[['Site','Date','Type','Category / Source','Vendor','Note','Amount','Paid / Received by','Custom split']];
+  sites.forEach(s=>{
+    expensesOf(s.id).forEach(e=>ledger.push([s.name,e.date,e.kind==='setup'?'Setup expense':'Expense',e.category||'',e.vendor||'',e.note||'',e.amount,(e.paidBy||[]).map(l=>pname(l.pid)+' '+l.amount).join(' + '),e.split&&e.split.length?e.split.map(x=>pname(x.pid)+' '+x.pct+'%').join(', '):'']));
+    incomesOf(s.id).forEach(e=>ledger.push([s.name,e.date,e.kind==='capital'?'Capital':e.kind==='refund'?'Refund':'Income',e.source||'','',e.note||'',e.amount,(e.receivedBy||[]).map(l=>pname(l.pid)+' '+l.amount).join(' + '),'']));
+    settlementsOf(s.id).forEach(e=>ledger.push([s.name,e.date,'Settlement','','',e.note||'',e.amount,pname(e.from)+' → '+pname(e.to),'']));
+  });
+  ledger.sort((a,b)=>(typeof a[1]==='string'&&typeof b[1]==='string')?a[1].localeCompare(b[1]):0);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ledger),'Ledger');
+  const months=[['Month','Income','Expenses','Profit / Loss']];
+  const eb={},ib={},sb={}; sites.forEach(s=>{eb[s.id]=expensesOf(s.id);ib[s.id]=incomesOf(s.id);sb[s.id]=settlementsOf(s.id);});
+  computeOverall(sites,eb,ib,sb,{from:_repFrom,to:_repTo}).byMonth.forEach(m=>months.push([monthLabel(m.month),m.inc/100,m.exp/100,(m.inc-m.exp)/100]));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(months),'Monthly');
+  const pt=[['Site','Partner','Paid out','Collected','Profit share','Net (+ is owed)']];
+  sites.forEach(s=>{ const r=computeSite(s,expensesOf(s.id),incomesOf(s.id),settlementsOf(s.id),{from:_repFrom,to:_repTo}); Object.values(r.partners).forEach(p=>pt.push([s.name,pname(p.pid),p.paidOut/100,p.revHeld/100,(r.profitParts[p.pid]||0)/100,p.net/100])); });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(pt),'Partners');
+  XLSX.writeFile(wb,'SiteBooks_'+(which==='all'?'All':sites[0].name.replace(/[^a-z0-9]+/gi,'_'))+'_'+todayStr()+'.xlsx');
+}
+
+/* ---- boot ---- */
+_setSyncCb(s=>{ const d=document.getElementById('syncDot'); if(d) d.className='dot '+(s==='saving'?'saving':s==='error'?'error':''); });
+setConflictHandler((kind,mine,theirs)=>{
+  toast('⚠️ Someone else just changed this '+kind.replace(/s$/,'')+'. Showing their version — please re-check and redo your edit.',5200);
+  if(typeof render==='function') render();
+});
+// keep in sync while the app is open: pull every 25 s and whenever the tab comes back to the foreground
+setInterval(()=>{ if(ME&&!document.getElementById('modal').classList.contains('open')){ pullAll().then(()=>render()); } },25000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&ME){ flushQueue(); pullAll().then(()=>{ if(!document.getElementById('modal').classList.contains('open')) render(); }); } });
+window.addEventListener('online',()=>{ flushQueue(); });
+// restore session in this browser tab
+try{ const n=sessionStorage.getItem('sb_user'); const u=USERS.find(x=>x.name===n); if(u){ ME=u; bootApp(); } }catch(e){}
+
+</script>
+</body></html>
