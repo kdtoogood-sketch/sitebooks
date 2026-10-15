@@ -1,7 +1,7 @@
 /* SiteBooks service worker — lets the app install to the home screen and open with no signal.
    Network-first: when online you always get the newest version; the cached copy is only a fallback.
    Cross-origin requests (Firestore, fonts, PDF/Excel libraries) are NEVER touched, so live data is never served stale. */
-const CACHE='sitebooks-v1';
+const CACHE='sitebooks-v2';
 const ASSETS=['./','./index.html','./manifest.json','./icon-192.png','./icon-512.png','./icon-180.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).catch(()=>{}).then(()=>self.skipWaiting()));
