@@ -1529,7 +1529,7 @@ const CSV_FIELDS=[
   ['fee','Service fee (host fee)',/service fee|host fee|commission/i,false],
   ['tds','Tax withheld / TDS',/tds|withh|tax withheld|income tax/i,false]
 ];
-let CSV={rows:[],headers:[],map:{},dateFmt:'auto',tdsBefore:false,fileName:'',listingSite:{},sitePayout:{},useCheckin:false,step:'pick',sel:{}};
+let CSV={rows:[],headers:[],map:{},dateFmt:'auto',tdsBefore:false,fileName:'',listingSite:{},sitePayout:{},useCheckin:true,step:'pick',sel:{}};
 function parseCSV(text){
   const rows=[]; let row=[],f='',q=false;
   text=text.replace(/^﻿/,'');
@@ -1560,11 +1560,12 @@ function csvDate(v,fmt){
   return '';
 }
 function openCsvImport(){
-  CSV={rows:[],headers:[],map:{},dateFmt:'auto',tdsBefore:false,fileName:'',listingSite:{},sitePayout:{},useCheckin:false,step:'pick',sel:{}};
+  CSV={rows:[],headers:[],map:{},dateFmt:'auto',tdsBefore:false,fileName:'',listingSite:{},sitePayout:{},useCheckin:true,step:'pick',sel:{}};
   openModal(`<div class="modal-title">⬆️ Import Airbnb CSV</div>
     <div class="card" style="font-size:12px;line-height:1.7;color:var(--text2)">
       <b>How to get the file</b><br>Airbnb (website) → <b>Menu → Earnings → Transaction history</b> (completed payouts) → <b>Download CSV</b>.<br>
-      Do this once a month for <b>each</b> Airbnb account. Uploading the same period twice is safe — already-imported rows are skipped.</div>
+      Do this once a month for <b>each</b> Airbnb account. Uploading the same period twice is safe — already-imported rows are skipped.<br>
+      <b>Tip:</b> download on the 3rd–5th of the month so last month's final nights (paid a day after check-in) are included.</div>
     <div class="form-group"><input type="file" accept=".csv,text/csv" class="form-input" onchange="csvPicked(this)"></div>
     <button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
 }
@@ -1582,7 +1583,7 @@ function csvPicked(inp){
       const sv=saved[k]; if(sv&&CSV.headers.includes(sv)){ CSV.map[k]=sv; return; }
       CSV.map[k]=CSV.headers.find(h=>re.test(h))||'';
     });
-    if(saved._dateFmt) CSV.dateFmt=saved._dateFmt; if(saved._tdsBefore) CSV.tdsBefore=true; if(saved._useCheckin) CSV.useCheckin=true;
+    if(saved._dateFmt) CSV.dateFmt=saved._dateFmt; if(saved._tdsBefore) CSV.tdsBefore=true; if(saved._entryDate) CSV.useCheckin=saved._entryDate==='in';
     csvRenderMap();
   };
   r.readAsText(f);
@@ -1596,14 +1597,15 @@ function csvRenderMap(){
     <div class="muted" style="margin-bottom:10px">${esc(CSV.fileName)} · ${CSV.rows.length} rows. Columns were matched automatically — fix any that look wrong.</div>
     ${CSV_FIELDS.map(([k,l,,req])=>`<div class="split-row"><span class="split-name" style="font-size:12px">${l}${req?' *':''}</span><select class="form-select" style="flex:1.4;padding:8px;font-size:12px" onchange="CSV.map['${k}']=this.value">${opt(k)}</select></div>`).join('')}
     <div class="form-row" style="margin-top:8px"><div class="form-group"><label class="form-label">Date format</label><select class="form-select" onchange="CSV.dateFmt=this.value"><option value="auto" ${CSV.dateFmt==='auto'?'selected':''}>Auto (${CSV._autoDmy?'DD/MM/YYYY':'MM/DD/YYYY'})</option><option value="mdy" ${CSV.dateFmt==='mdy'?'selected':''}>MM/DD/YYYY</option><option value="dmy" ${CSV.dateFmt==='dmy'?'selected':''}>DD/MM/YYYY</option></select></div>
-      <div class="form-group"><label class="form-label">Entry date</label><select class="form-select" onchange="CSV.useCheckin=this.value==='in'"><option value="tx" ${!CSV.useCheckin?'selected':''}>Transaction date</option><option value="in" ${CSV.useCheckin?'selected':''}>Check-in date</option></select></div></div>
+      <div class="form-group"><label class="form-label">Entry date</label><select class="form-select" onchange="CSV.useCheckin=this.value==='in'"><option value="in" ${CSV.useCheckin?'selected':''}>Check-in date (recommended)</option><option value="tx" ${!CSV.useCheckin?'selected':''}>Transaction date (when Airbnb paid)</option></select></div></div>
+    <div class="muted" style="font-size:11px;margin:-4px 0 8px">Check-in date puts each stay in the month the guest arrived — e.g. a 31 Oct stay counts in October even though Airbnb pays it on 1 Nov.</div>
     <label class="chk" style="margin:4px 0 12px;font-size:12px"><input type="checkbox" ${CSV.tdsBefore?'checked':''} onchange="CSV.tdsBefore=this.checked"> "Amount" column is <u>before</u> TDS (subtract TDS to get net in hand)</label>
     <button class="submit-btn" onclick="csvBuild()">Next → preview</button><button class="cancel-btn" onclick="openCsvImport()">← Choose another file</button>`);
 }
 function csvRowKey(r){ return [csvCol(r,'date'),csvCol(r,'type'),csvCol(r,'code'),csvCol(r,'amount'),csvCol(r,'listing'),csvCol(r,'guest')].join('|').toLowerCase(); }
 function csvBuild(){
   for(const [k,l,,req] of CSV_FIELDS){ if(req&&!CSV.map[k]){ toast('Pick the column for: '+l); return; } }
-  try{ localStorage.setItem('sb_csvmap',JSON.stringify({...CSV.map,_dateFmt:CSV.dateFmt,_tdsBefore:CSV.tdsBefore,_useCheckin:CSV.useCheckin})); }catch(_){}
+  try{ localStorage.setItem('sb_csvmap',JSON.stringify({...CSV.map,_dateFmt:CSV.dateFmt,_tdsBefore:CSV.tdsBefore,_entryDate:CSV.useCheckin?'in':'tx'})); }catch(_){}
   const done=new Set(); DB.incomes.concat(DB.expenses).forEach(x=>{ if(!x.deleted)(x.importRows||[]).forEach(k=>done.add(k)); });
   const groups={}; let skippedPayout=0, already=0;
   CSV.rows.forEach((r,idx)=>{
