@@ -129,6 +129,7 @@ img.rc{max-width:100%;max-height:150px;border-radius:10px;margin-top:8px;border:
     <div class="nav-item" data-tab="sites" onclick="go('sites')"><div class="nav-icon">🏗️</div><div class="nav-label">Sites</div></div>
     <div class="nav-item" data-tab="buy" onclick="go('buy')"><div class="nav-icon">📋</div><div class="nav-label">Planner</div></div>
     <div class="nav-item" data-tab="reports" onclick="go('reports')"><div class="nav-icon">📊</div><div class="nav-label">Reports</div></div>
+    <div class="nav-item" data-tab="clean" onclick="go('clean')"><div class="nav-icon">🧹</div><div class="nav-label">Cleaning</div></div>
     <div class="nav-item" data-tab="partners" onclick="go('partners')"><div class="nav-icon">👥</div><div class="nav-label">Partners</div></div>
     <div class="nav-item" data-tab="log" onclick="go('log')"><div class="nav-icon">🧾</div><div class="nav-label">Activity</div></div>
   </div>
@@ -566,7 +567,8 @@ const settlementsOf=sid=>DB.settlements.filter(x=>x.siteId===sid&&!x.deleted);
 const USERS=[
   {name:'Kanwar', login:'kd@kdcinfra.in',      role:'admin'},
   {name:'Baljot', login:'baljot@kdcinfra.in',  role:'admin'},
-  {name:'Nikshit',login:'nikshit@kdcinfra.in', role:'admin'}
+  {name:'Nikshit',login:'nikshit@kdcinfra.in', role:'admin'},
+  {name:'Preeti', login:'preeti@kdcinfra.in',  role:'cleaning'}   // sees ONLY the cleaning register
 ];
 const AUTH_STORE='sitebooks_auth';
 let _auth=null, _authPick='', _authRefreshing=null, _signingIn=false;
@@ -658,13 +660,14 @@ function go(tab){ TAB=tab; CUR_SITE=null; render(); $('scroll').scrollTop=0; }
 function openSite(id,tab){ CUR_SITE=id; SITE_TAB=tab||'exp'; TAB='site'; render(); $('scroll').scrollTop=0; }
 
 function render(){
+  if(isCleaner()){ $('pageTitle').textContent='🧹 Cleaning'; $('backBtn').style.display='none'; try{ $('view').innerHTML=viewCleaner(); }catch(e){ console.error(e); $('view').innerHTML='<div class="empty"><p>Something went wrong: '+esc(e.message)+'</p></div>'; } return; }
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.tab===(TAB==='site'?'sites':TAB)));
   const t=TAB;
-  $('pageTitle').textContent=t==='home'?'Dashboard':t==='sites'?'Sites':t==='site'?(siteById(CUR_SITE)?.name||'Site'):t==='reports'?'Reports':t==='buy'?'Planner':t==='partners'?'Partners':t==='log'?'Activity & Backup':'';
+  $('pageTitle').textContent=t==='home'?'Dashboard':t==='sites'?'Sites':t==='site'?(siteById(CUR_SITE)?.name||'Site'):t==='reports'?'Reports':t==='buy'?'Planner':t==='partners'?'Partners':t==='log'?'Activity & Backup':t==='clean'?'Cleaning':'';
   $('backBtn').style.display=(t==='site')?'flex':'none';
   const el=$('view');
   try{
-    el.innerHTML = t==='home'?viewHome():t==='sites'?viewSites():t==='site'?viewSite():t==='reports'?viewReports():t==='buy'?viewBuy():t==='partners'?viewPartners():t==='log'?viewLog():'';
+    el.innerHTML = t==='home'?viewHome():t==='sites'?viewSites():t==='site'?viewSite():t==='reports'?viewReports():t==='buy'?viewBuy():t==='partners'?viewPartners():t==='log'?viewLog():t==='clean'?viewClean():'';
   }catch(e){ console.error(e); el.innerHTML=`<div class="empty"><div class="emo">⚠️</div><p>Something went wrong showing this screen.<br><small>${esc(e.message)}</small></p></div>`; }
 }
 
@@ -697,17 +700,21 @@ async function doLogout(){
 }
 function bootApp(){
   $('login').style.display='none'; $('app').style.display='flex'; $('who').textContent=ME.name;
+  if(isCleaner()){                      // Preeti: cleaning register only — no SiteBooks data is loaded or cached
+    document.querySelector('.bottom-nav').style.display='none'; $('syncDot').style.display='none';
+    KINDS.forEach(k=>DB[k]=[]); render(); clLoad().then(render); return;
+  }
   cacheLoad(); render();
   // Only seed founders after a SUCCESSFUL pull: if we're offline with an empty cache we must not write blank
   // founder records over ones a partner has since filled in with phone / PAN / address.
-  pullAll().then(okPull=>{ if(okPull) ensureSelfPartner(); render(); setTimeout(plCheckDue,800); setTimeout(sbDriveRun,6000); });
+  pullAll().then(okPull=>{ if(okPull) ensureSelfPartner(); render(); setTimeout(plCheckDue,800); setTimeout(sbDriveRun,6000); if(okPull) clLoad().then(()=>{ if(!document.getElementById('modal').classList.contains('open')) render(); }); });
   if(!bootApp._drvTimer) bootApp._drvTimer=setInterval(()=>{ if(!document.hidden) sbDriveRun(); },300000);
   flushQueue();
 }
 /* The three logins ARE the founding partners. They get FIXED ids, so if all three phones open the app for the
    first time at the same instant they each write the same three documents (identical content) instead of each
    inventing their own set. Only written when a founding partner is missing from the loaded data. */
-const FOUNDERS=USERS.map(u=>({id:'p_'+u.name.toLowerCase(),name:u.name}));
+const FOUNDERS=USERS.filter(u=>u.role==='admin').map(u=>({id:'p_'+u.name.toLowerCase(),name:u.name}));
 function ensureSelfPartner(){
   FOUNDERS.forEach(f=>{
     const exists=DB.partners.some(p=>p.id===f.id);
@@ -2166,7 +2173,7 @@ function plCal(id){ const x=findLocal('purchases',id); if(!x) return;
 function plEnableAlerts(){ if(typeof Notification==='undefined'){toast('This phone does not support alerts');return;}
   Notification.requestPermission().then(p=>{ toast(p==='granted'?'🔔 Alerts on':'Alerts were not allowed'); render(); plCheckDue(); }); }
 const PL_SEEN_KEY='sitebooks_alerted_v1';
-function plCheckDue(){
+function plCheckDue(){ if(ME&&ME.role==='cleaning') return;
   if(!ME) return; let seen={}; try{seen=JSON.parse(localStorage.getItem(PL_SEEN_KEY)||'{}');}catch(e){}
   const now=new Date(), t=todayStr(), hm=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
   const due=purchaseList().filter(x=>plType(x)==='task'&&!plDone(x)&&plMine(x)&&x.time&&((x.date||t)<t||((x.date||t)===t&&x.time<=hm)));
@@ -2377,13 +2384,332 @@ function exportXLSX(which){
 
 /* ---- boot ---- */
 _setSyncCb(s=>{ const d=document.getElementById('syncDot'); if(d) d.className='dot '+(s==='saving'?'saving':s==='error'?'error':''); });
+/* ════════════ CLEANING REGISTER ════════════
+   Preeti's login sees ONLY this screen. Cleaning data lives in its own collections (sbclean, sbclean_cfg),
+   which the database rules open to the three partners + Preeti; every other SiteBooks collection stays closed
+   to her. Snabbit / Urban Company entries are posted into site expenses by a partner's app, using fixed ids
+   (cl_<entry>_<site>) so two phones posting at once write the same record and nothing is ever doubled.
+   Caretakers are paid monthly from the Cleaning tab ("Mark paid"), which adds the expense to each site in
+   proportion to the cleanings done there. */
+const CL_COLL='sbclean', CL_CFG='sbclean_cfg';
+const CL={cfg:null,list:[],loaded:false,err:'',month:'',all:false};
+let CLF=null;                         // cleaning form state
+const isCleaner=()=>ME&&ME.role==='cleaning';
+async function clList(){
+  const out=[]; let tok='';
+  do{
+    const r=await fetch(`${FB_BASE}/${CL_COLL}?pageSize=300${tok?'&pageToken='+encodeURIComponent(tok):''}`,{cache:'no-store'});
+    if(r.status===404) break;
+    if(!r.ok){const e=new Error('HTTP '+r.status);e.status=r.status;throw e;}
+    const j=await r.json(); (j.documents||[]).forEach(d=>{const o=docToObj(d);o.id=d.name.split('/').pop();out.push(o);}); tok=j.nextPageToken||'';
+  }while(tok);
+  return out;
+}
+async function clGetCfg(){
+  const r=await fetch(`${FB_BASE}/${CL_CFG}/main`,{cache:'no-store'});
+  if(r.status===404) return null;
+  if(!r.ok){const e=new Error('HTTP '+r.status);e.status=r.status;throw e;}
+  return docToObj(await r.json());
+}
+async function clPut(coll,obj){
+  const {id,...rest}=obj; Object.keys(rest).forEach(k=>{ if(k.startsWith('_')) delete rest[k]; });
+  const r=await fetch(`${FB_BASE}/${coll}/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(objToDoc(rest))});
+  if(!r.ok){const e=new Error('HTTP '+r.status);e.status=r.status;throw e;}
+}
+function clDefaultCfg(){
+  const sites=siteList(); const find=n=>{ const s=sites.find(x=>String(x.name).toLowerCase().includes(n)); return s?s.id:''; };
+  const eb=find('ebony')||find('urban haven');
+  return {units:[{id:'u_eb1',name:'Ebony 1',siteId:eb},{id:'u_eb2',name:'Ebony 2',siteId:eb},{id:'u_maple',name:'Maple',siteId:find('maple')},{id:'u_pine',name:'Pine',siteId:find('pine')}],
+    caretakers:[{id:'c_ganga',name:'Ganga Ram',rate:100,active:true},{id:'c_ramkumar',name:'Ram Kumar',rate:100,active:true}],
+    companies:['Snabbit','Urban Company'],partners:partnerList().map(p=>({id:p.id,name:p.name})),defaultPayer:'p_kanwar'};
+}
+async function clLoad(){
+  try{
+    const [cfg,list]=await Promise.all([clGetCfg(),clList()]);
+    CL.cfg=cfg; CL.list=list; CL.err='';
+    if(!isCleaner()&&DB.sites.length){
+      if(!CL.cfg){ CL.cfg=clDefaultCfg(); await clPut(CL_CFG,{id:'main',...CL.cfg}); }
+      else{ const ps=partnerList().map(p=>({id:p.id,name:p.name})); if(ps.length&&JSON.stringify(ps)!==JSON.stringify(CL.cfg.partners||[])){ CL.cfg.partners=ps; clPut(CL_CFG,{id:'main',...CL.cfg}).catch(()=>{}); } }
+      clReconcile();
+    }
+  }catch(e){ CL.err=(e&&e.status===403)?'rule':'net'; }
+  CL.loaded=true;
+}
+const clUnit=id=>((CL.cfg&&CL.cfg.units)||[]).find(u=>u.id===id);
+const clUnitName=(id,e)=>{ const u=clUnit(id); if(u) return u.name; const i=(e&&e.units||[]).indexOf(id); return (e&&e.unitNames&&e.unitNames[i])||'?'; };
+const clCare=id=>((CL.cfg&&CL.cfg.caretakers)||[]).find(c=>c.id===id);
+const clPartnerName=pid=>{ const p=((CL.cfg&&CL.cfg.partners)||[]).find(x=>x.id===pid); return p?p.name:(typeof pname==='function'?pname(pid):pid); };
+function clCost(e){ return e.by==='ext'?toPaise(e.amount):(e.units||[]).length*toPaise(e.rate||0); }
+/* split an amount over units equally, then add up per site (unit with no site → key '') */
+function clSiteShares(units,total){
+  const parts=_eqParts(total,units.length||1); const out={};
+  units.forEach((u,i)=>{ const sid=(clUnit(u)||{}).siteId||''; out[sid]=(out[sid]||0)+parts[i]; });
+  return out;
+}
+/* Snabbit / UC → site expenses (runs on a partner's phone; idempotent) */
+function clReconcile(){
+  if(!CL.cfg||isCleaner()) return; let changed=0;
+  CL.list.filter(e=>e.kind==='clean'&&e.by==='ext').forEach(e=>{
+    e._err='';
+    if(e.postedAt&&e.postedAt>=(e.updatedAt||0)) return;
+    const want=e.deleted?{}:clSiteShares(e.units||[],toPaise(e.amount));
+    if('' in want){ e._err='A unit is not linked to a site — open Cleaning → Setup'; return; }
+    for(const sid of Object.keys(want)){ const s=siteById(sid); if(!s){ e._err='Linked site not found — check Setup'; return; } if(!(s.partners||[]).some(p=>p.pid===e.paidBy)){ e._err=clPartnerName(e.paidBy)+' is not a partner in '+s.name; return; } }
+    Object.entries(want).forEach(([sid,p])=>{
+      const s=siteById(sid); const id='cl_'+e.id+'_'+sid; const ex=DB.expenses.find(x=>x.id===id);
+      const names=(e.units||[]).filter(u=>(clUnit(u)||{}).siteId===sid).map(u=>clUnitName(u,e)).join(', ');
+      saveRecord('expenses',{...(ex||{}),id,siteId:sid,date:e.date,amount:p/100,category:'Cleaning',vendor:e.company||'Snabbit',kind:'run',
+        paidBy:[{pid:e.paidBy,amount:p/100}],note:`${e.company||'Snabbit'} – ${names} (marked by ${e.createdBy||'—'})`,split:null,
+        stampedSplit:(ex&&ex.stampedSplit&&ex.stampedSplit.length)?ex.stampedSplit:s.expenseSplit.map(y=>({pid:y.pid,pct:y.pct})),
+        receipt:(ex&&ex.receipt)||'',cleanRef:e.id,deleted:false,deletedAt:null,deletedBy:null},ME.name);
+    });
+    DB.expenses.filter(x=>!x.deleted&&x.cleanRef===e.id&&!(x.siteId in want)).forEach(x=>deleteRecord('expenses',x.id,ME.name));
+    logAction(ME.name,`Cleaning: ${e.deleted?'removed':'added'} ${e.company||'Snabbit'} ${inr(toPaise(e.amount))} on ${fmtDate(e.date)} (${(e.units||[]).map(u=>clUnitName(u,e)).join(', ')}) — marked by ${e.createdBy||'—'}`);
+    e.postedAt=Date.now(); clPut(CL_COLL,{...e}).catch(()=>{ e.postedAt=0; }); changed++;
+  });
+  return changed;
+}
+
+/* ---------- the entry form (Preeti's whole screen; partners get it in a pop-up) ---------- */
+function clNewForm(){ return {id:'',date:todayStr(),units:[],by:'',company:((CL.cfg&&CL.cfg.companies)||['Snabbit'])[0],amount:'',paidBy:(CL.cfg&&CL.cfg.defaultPayer)||''}; }
+function clFormHTML(){
+  const f=CLF, cfg=CL.cfg; const care=(cfg.caretakers||[]).filter(c=>c.active!==false||c.id===f.by);
+  const chip=(on,cls,click,label)=>`<span class="pchip ${on?'on':''} ${cls}" onclick="${click}">${on?'✓ ':''}${label}</span>`;
+  let note='';
+  if(f.by&&f.by!=='ext'){ const c=clCare(f.by); const n=f.units.length; note=n&&c?`<div class="card" style="background:#f3fbf6;border-color:#bfe6cc;margin:10px 0"><b>${esc(c.name)} · ${n} unit${n>1?'s':''} × ${inr(toPaise(c.rate))} = ${inr(n*toPaise(c.rate))}</b><div class="muted">Paid monthly — goes into this month's total</div></div>`:''; }
+  if(f.by==='ext'&&f.units.length&&Number(f.amount)>0) note=`<div class="card" style="background:var(--bluebg);border-color:#c9dafb;margin:10px 0"><b>${inr(toPaise(f.amount))} → ${esc(f.units.map(u=>clUnitName(u)).join(', '))}</b><div class="muted">Goes straight into the site expenses as “Cleaning – ${esc(f.company)}”</div></div>`;
+  return `<div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="cl_date" value="${f.date}" max="${todayStr()}" onchange="CLF.date=this.value"></div>
+   <div class="form-label">Which units were cleaned?</div>
+   <div class="chips" style="margin-bottom:12px">${(cfg.units||[]).map(u=>chip(f.units.includes(u.id),'',`clTog('units','${u.id}')`,esc(u.name))).join('')}</div>
+   <div class="form-label">Cleaned by</div>
+   <div class="chips" style="margin-bottom:6px">${care.map(c=>chip(f.by===c.id,'',`clSet('by','${c.id}')`,esc(c.name))).join('')}${chip(f.by==='ext','',`clSet('by','ext')`,'Snabbit / UC')}</div>
+   ${f.by==='ext'?`<div class="form-label" style="margin-top:8px">Company</div><div class="chips" style="margin-bottom:10px">${(cfg.companies||[]).map(c=>chip(f.company===c,'',`clSet('company',${JSON.stringify(c).replace(/"/g,'&quot;')})`,esc(c))).join('')}</div>
+     <div class="form-group"><label class="form-label">Amount paid (₹)</label><input type="number" step="0.01" inputmode="decimal" class="form-input" id="cl_amt" value="${esc(f.amount)}" oninput="CLF.amount=this.value;clNote()"></div>
+     <div class="form-label">Paid by</div><div class="chips" style="margin-bottom:6px">${(cfg.partners||[]).map(p=>chip(f.paidBy===p.id,'',`clSet('paidBy','${p.id}')`,esc(p.name))).join('')}</div>`:''}
+   <div id="cl_note">${note}</div>
+   <button class="submit-btn" style="background:var(--green)" onclick="clSave()">${f.id?'Update':'Save'}</button>
+   ${f.id?`<button class="cancel-btn danger" onclick="clDelete('${f.id}')">Delete this entry</button>`:''}
+   ${f.id||!isCleaner()?`<button class="cancel-btn" onclick="clCancel()">Cancel</button>`:''}`;
+}
+function clRefreshForm(){ const box=$('cl_form'); if(box){ const y=$('scroll').scrollTop; box.innerHTML=clFormHTML(); $('scroll').scrollTop=y; } }
+function clNote(){ const keep=document.activeElement&&document.activeElement.id; clRefreshForm(); if(keep&&$(keep)){ const el=$(keep); el.focus(); if(el.setSelectionRange&&el.type!=='number') el.setSelectionRange(el.value.length,el.value.length); } }
+function clTog(k,v){ const a=CLF[k]; const i=a.indexOf(v); if(i>=0)a.splice(i,1); else a.push(v); clRefreshForm(); }
+function clSet(k,v){ CLF[k]=v; if(k==='by'&&v==='ext'&&!CLF.paidBy) CLF.paidBy=(CL.cfg&&CL.cfg.defaultPayer)||''; clRefreshForm(); }
+function clCancel(){ CLF=clNewForm(); if(isCleaner()) render(); else closeModal(); }
+async function clSave(){
+  const f=CLF; const d=$('cl_date')?$('cl_date').value:f.date; f.date=d;
+  if(!d){toast('Pick the date');return;} if(d>todayStr()){toast('Date cannot be in the future');return;}
+  if(!f.units.length){toast('Tick the units that were cleaned');return;}
+  if(!f.by){toast('Choose who cleaned');return;}
+  let rec={kind:'clean',date:d,units:f.units.slice(),unitNames:f.units.map(u=>clUnitName(u)),by:f.by};
+  if(f.by==='ext'){
+    const a=Number($('cl_amt')?$('cl_amt').value:f.amount); if(!(a>0)){toast('Enter the amount paid');return;}
+    if(!f.paidBy){toast('Choose who paid');return;}
+    Object.assign(rec,{byName:f.company,company:f.company,amount:a,paidBy:f.paidBy});
+  }else{
+    const c=clCare(f.by); if(!c){toast('Caretaker not found');return;}
+    const old=f.id?CL.list.find(x=>x.id===f.id):null;
+    Object.assign(rec,{byName:c.name,rate:(old&&old.by===f.by&&old.rate!=null)?old.rate:Number(c.rate||0)});
+    const dup=CL.list.find(x=>x.kind==='clean'&&!x.deleted&&x.id!==f.id&&x.date===d&&x.by===f.by&&(x.units||[]).some(u=>f.units.includes(u)));
+    if(dup&&!confirm(c.name+' is already marked for '+dup.units.filter(u=>f.units.includes(u)).map(u=>clUnitName(u,dup)).join(', ')+' on this date. Mark again?')) return;
+    if(old&&old.payId){ toast('This month is already paid for '+c.name+' — ask Kanwar to undo the payment first'); return; }
+  }
+  const old=f.id?CL.list.find(x=>x.id===f.id):null;
+  const full={...(old||{id:'c'+uid(),createdBy:ME.name,createdAt:Date.now()}),...rec,updatedAt:Date.now(),updatedBy:ME.name,deleted:false};
+  if(full.by!=='ext'){ delete full.company; delete full.amount; delete full.paidBy; }
+  const btn=document.querySelector('#cl_form .submit-btn'); if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{ await clPut(CL_COLL,full); }
+  catch(e){ if(btn){btn.disabled=false;btn.textContent=f.id?'Update':'Save';} toast(e&&e.status===403?'⛔ No permission — ask Kanwar to update the Firebase rule':'📶 Not saved — check internet and try again',4000); return; }
+  const i=CL.list.findIndex(x=>x.id===full.id); if(i>=0)CL.list[i]=full; else CL.list.push(full);
+  if(!isCleaner()){ if(full.by==='ext') clReconcile(); logAction(ME.name,`Cleaning ${old?'edited':'marked'}: ${full.byName} · ${full.unitNames.join(', ')} · ${fmtDate(full.date)}`); }
+  CLF=clNewForm(); toast(old?'✓ Updated':'✓ Saved');
+  if(isCleaner()) render(); else { closeModal(); render(); }
+}
+async function clDelete(id){
+  const e=CL.list.find(x=>x.id===id); if(!e)return;
+  if(e.payId){ toast('Already paid — undo the payment first'); return; }
+  if(!confirm('Delete this cleaning entry ('+(e.byName||'')+', '+fmtDate(e.date)+')?'))return;
+  const full={...e,deleted:true,updatedAt:Date.now(),updatedBy:ME.name};
+  try{ await clPut(CL_COLL,full); }catch(err){ toast('📶 Not deleted — check internet'); return; }
+  Object.assign(e,full); if(!isCleaner()){ if(e.by==='ext') clReconcile(); logAction(ME.name,'Cleaning entry deleted: '+(e.byName||'')+' · '+fmtDate(e.date)); }
+  CLF=clNewForm(); toast('Deleted'); if(isCleaner()) render(); else { closeModal(); render(); }
+}
+function clEntryRow(e,canEdit){
+  const ext=e.by==='ext';
+  return `<div class="entry" ${canEdit?`onclick="clEdit('${e.id}')"`:''} style="${canEdit?'':'cursor:default'}"><div class="entry-l"><div class="entry-t">${esc(e.byName||'')}</div>
+    <div class="entry-s">${fmtDate(e.date)} · ${esc((e.units||[]).map(u=>clUnitName(u,e)).join(', '))}${ext?' · paid by '+esc(clPartnerName(e.paidBy)):''}${e.createdBy&&!isCleaner()?' · by '+esc(e.createdBy):''}</div>
+    ${e._err?`<div class="entry-s" style="color:var(--red);font-weight:700">⚠️ ${esc(e._err)}</div>`:''}${e.payId?'<div class="entry-s" style="color:var(--green);font-weight:700">✓ Paid</div>':''}</div>
+    <div class="entry-a ${ext?'b':'g'}">${inr(clCost(e))}${canEdit?' ✏️':''}</div></div>`;
+}
+function clAddOpen(){ CLF=clNewForm(); openModal(`<div class="modal-title">🧹 Mark cleaning</div><div id="cl_form">${clFormHTML()}</div>`); }
+function clEdit(id){
+  const e=CL.list.find(x=>x.id===id); if(!e)return;
+  CLF={id:e.id,date:e.date,units:(e.units||[]).slice(),by:e.by,company:e.company||((CL.cfg.companies||[])[0]),amount:e.amount!=null?String(e.amount):'',paidBy:e.paidBy||CL.cfg.defaultPayer||''};
+  if(isCleaner()){ render(); $('scroll').scrollTop=0; }
+  else openModal(`<div class="modal-title">🧹 ${e.id?'Edit':'Mark'} cleaning</div><div id="cl_form">${clFormHTML()}</div>`);
+}
+function clRuleHTML(){
+  return `<div class="card" style="border-color:#f3c0b8;background:#fff6f4"><b>Database permission needed for the cleaning register.</b>
+   <div class="muted" style="margin:6px 0">In Firebase → Firestore → Rules, add these lines inside <code>match /databases/{database}/documents { … }</code>, then Publish:</div>
+   <pre style="white-space:pre-wrap;font-size:11px;background:#fff;border:1px solid #eee;border-radius:8px;padding:8px">match /sbclean/{doc} {
+  allow read, write: if request.auth != null && request.auth.token.email in
+    ['kd@kdcinfra.in','baljot@kdcinfra.in','nikshit@kdcinfra.in','preeti@kdcinfra.in'];
+}
+match /sbclean_cfg/{doc} {
+  allow read, write: if request.auth != null && request.auth.token.email in
+    ['kd@kdcinfra.in','baljot@kdcinfra.in','nikshit@kdcinfra.in','preeti@kdcinfra.in'];
+}</pre><button class="submit-btn" onclick="CL.loaded=false;render();clLoad().then(render)">Try again</button></div>`;
+}
+/* ---------- Preeti's screen ---------- */
+function viewCleaner(){
+  if(!CL.loaded) return `<div class="empty"><div class="emo">🧹</div><p>Loading…</p></div>`;
+  if(CL.err==='rule') return `<div class="empty"><div class="emo">⛔</div><p>Your login doesn't have access yet.<br>Ask Kanwar to switch on the cleaning register.</p></div>`;
+  if(CL.err) return `<div class="empty"><div class="emo">📶</div><p>No internet.</p><button class="submit-btn" style="max-width:200px;margin:12px auto" onclick="CL.loaded=false;render();clLoad().then(render)">Try again</button></div>`;
+  if(!CL.cfg) return `<div class="empty"><div class="emo">⚙️</div><p>Not set up yet — ask Kanwar to open SiteBooks once.</p></div>`;
+  if(!CLF) CLF=clNewForm();
+  const from=(()=>{const d=new Date();d.setDate(d.getDate()-7);return d.toISOString().slice(0,10);})();
+  const recent=CL.list.filter(e=>e.kind==='clean'&&!e.deleted&&e.date>=from).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
+  const today=todayStr();
+  return `${CLF.id?'<div class="card" style="background:#fff4ec;border-color:#f6c7a6;font-weight:800">✏️ Editing an entry</div>':''}<div id="cl_form">${clFormHTML()}</div>
+   <div class="sec-hdr" style="margin-top:18px">Last 7 days</div>
+   ${recent.length?recent.map(e=>clEntryRow(e,!e.payId&&((e.createdAt&&new Date(e.createdAt).toISOString().slice(0,10)===today)||e.date===today))).join(''):'<div class="muted" style="padding:6px 2px">Nothing marked yet.</div>'}
+   <div class="muted" style="text-align:center;margin:14px 0 4px">You can correct today's entries — tap ✏️</div>`;
+}
+/* ---------- partners: Cleaning tab ---------- */
+function clMonthData(m){
+  const ent=CL.list.filter(e=>e.kind==='clean'&&!e.deleted&&String(e.date).slice(0,7)===m);
+  const pays=CL.list.filter(e=>e.kind==='pay'&&!e.deleted&&e.month===m);
+  const care={};
+  ent.filter(e=>e.by!=='ext').forEach(e=>{
+    const c=care[e.by]||(care[e.by]={id:e.by,name:(clCare(e.by)||{}).name||e.byName,n:0,amt:0,units:{},sites:{},paid:0,pays:[]});
+    const per=toPaise(e.rate||0);
+    (e.units||[]).forEach(u=>{ c.n++; c.amt+=per; c.units[u]=(c.units[u]||0)+1; const sid=(clUnit(u)||{}).siteId||''; c.sites[sid]=(c.sites[sid]||0)+per; });
+  });
+  pays.forEach(p=>{ const c=care[p.by]||(care[p.by]={id:p.by,name:p.byName,n:0,amt:0,units:{},sites:{},paid:0,pays:[]}); c.paid+=toPaise(p.amount); c.pays.push(p); });
+  const ext=ent.filter(e=>e.by==='ext'); const extSites={}; ext.forEach(e=>Object.entries(clSiteShares(e.units||[],toPaise(e.amount))).forEach(([s,p])=>extSites[s]=(extSites[s]||0)+p));
+  return {ent,care:Object.values(care),ext,extTot:ext.reduce((a,e)=>a+toPaise(e.amount),0),extSites};
+}
+function clShiftMonth(d){ const [y,mo]=CL.month.split('-').map(Number); const t=new Date(y,mo-1+d,1); CL.month=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0'); render(); }
+function viewClean(){
+  if(!CL.loaded){ if(!clLoad._busy){ clLoad._busy=true; clLoad().then(()=>{clLoad._busy=false;render();}); } return `<div class="empty"><div class="emo">🧹</div><p>Loading…</p></div>`; }
+  if(CL.err==='rule') return clRuleHTML();
+  if(CL.err) return `<div class="empty"><div class="emo">📶</div><p>Couldn't load the cleaning register.</p><button class="submit-btn" style="max-width:200px;margin:12px auto" onclick="CL.loaded=false;render()">Try again</button></div>`;
+  if(!CL.cfg) return `<div class="empty"><p>Setting up…</p></div>`;
+  if(!CL.month) CL.month=monthStr();
+  const D=clMonthData(CL.month); const careTot=D.care.reduce((a,c)=>a+c.amt,0);
+  const unmapped=(CL.cfg.units||[]).filter(u=>!u.siteId||!siteById(u.siteId));
+  const errs=CL.list.filter(e=>e._err&&!e.deleted);
+  let h=`<div class="chips" style="margin-bottom:10px;flex-wrap:nowrap"><span class="pchip" onclick="clShiftMonth(-1)">‹</span><span class="pchip on" style="flex:1;text-align:center">${monthLabel(CL.month)}</span><span class="pchip" onclick="clShiftMonth(1)">›</span><span class="pchip" onclick="clSetup()">⚙️ Setup</span></div>`;
+  if(unmapped.length) h+=`<div class="card" style="border-color:#f3c0b8;background:#fff6f4;font-size:13px">⚠️ ${unmapped.map(u=>esc(u.name)).join(', ')} not linked to a site — tap <b>⚙️ Setup</b> so costs go to the right site.</div>`;
+  errs.forEach(e=>h+=`<div class="card" style="border-color:#f3c0b8;background:#fff6f4;font-size:13px">⚠️ ${esc(e.byName)} ${inr(clCost(e))} on ${fmtDate(e.date)} not added to expenses: ${esc(e._err)}</div>`);
+  h+=`<div class="hero small"><div class="hero-lbl">${monthLabel(CL.month)} · cleaning cost</div><div class="hero-val">${inr(careTot+D.extTot)}</div><div class="hero-sub">Caretakers ${inr(careTot)} · Snabbit/UC ${inr(D.extTot)}</div></div>`;
+  h+=`<button class="submit-btn" style="background:var(--green);margin-bottom:12px" onclick="clAddOpen()">＋ Mark cleaning</button>`;
+  if(!D.care.length&&!D.ext.length) h+=`<div class="empty"><div class="emo">🧹</div><p>Nothing marked for ${monthLabel(CL.month)}.</p></div>`;
+  D.care.forEach(c=>{
+    const due=c.amt-c.paid; const uTxt=Object.entries(c.units).map(([u,n])=>esc(clUnitName(u))+' ×'+n).join(' · ');
+    const rate=(clCare(c.id)||{}).rate;
+    h+=`<div class="card"><div style="display:flex;justify-content:space-between;gap:8px"><div><div style="font-weight:900;font-size:15px">${esc(c.name)}</div><div class="muted">${c.n} cleaning${c.n!==1?'s':''}${rate!=null?' · ₹'+rate+' each':''}</div></div><div style="font-weight:900;font-size:18px">${inr(c.amt)}</div></div>
+      ${uTxt?`<div class="muted" style="margin:6px 0">${uTxt}</div>`:''}
+      ${c.pays.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px"><span class="tagsplit" style="background:#e8f7ee;color:var(--green);font-weight:800">✓ ${inr(toPaise(p.amount))} paid ${fmtDate(p.date)} by ${esc(clPartnerName(p.paidBy))}</span><button class="mini-btn del" onclick="clUndoPay('${p.id}')">Undo</button></div>`).join('')}
+      ${due>0?`<button class="submit-btn" style="margin-top:10px;padding:10px" onclick="clPayOpen('${c.id}')">Mark paid · ${inr(due)}</button>`:due<0?`<div class="muted" style="margin-top:6px;color:var(--red)">Paid ${inr(-due)} more than the cleanings marked</div>`:c.pays.length?'':''}</div>`;
+  });
+  if(D.ext.length) h+=`<div class="card"><div style="display:flex;justify-content:space-between"><div><div style="font-weight:900;font-size:15px">Snabbit / Urban Company</div><div class="muted">${D.ext.length} booking${D.ext.length!==1?'s':''} · already in site expenses</div></div><div style="font-weight:900;font-size:18px">${inr(D.extTot)}</div></div>
+     <div class="muted" style="margin-top:6px">${Object.entries(D.extSites).map(([s,p])=>esc((siteById(s)||{}).name||'?')+' '+inr(p)).join(' · ')}</div></div>`;
+  if(D.ent.length){
+    h+=`<div class="sec-hdr" style="cursor:pointer" onclick="CL.all=!CL.all;render()">Every entry (${D.ent.length}) <span class="muted">${CL.all?'▲ hide':'▼ show'}</span></div>`;
+    if(CL.all) h+=D.ent.slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0)).map(e=>clEntryRow(e,true)).join('');
+  }
+  return h;
+}
+/* Mark paid: proportional to cleanings per site this month */
+function clAllocate(amountP,weights){
+  const ks=Object.keys(weights).filter(k=>weights[k]>0); const W=ks.reduce((a,k)=>a+weights[k],0); const out={}; if(!W) return out;
+  let used=0; const rem=[];
+  ks.forEach(k=>{ const raw=amountP*weights[k]/W; const f=Math.floor(raw); out[k]=f; used+=f; rem.push([raw-f,k]); });
+  rem.sort((a,b)=>b[0]-a[0]); for(let i=0;i<amountP-used;i++) out[rem[i%rem.length][1]]++;
+  return out;
+}
+let _clPay=null;
+function clPayOpen(cid){
+  const D=clMonthData(CL.month); const c=D.care.find(x=>x.id===cid); if(!c)return;
+  if('' in c.sites){ toast('Link every unit to a site first (⚙️ Setup)'); return; }
+  _clPay={cid,month:CL.month,paidBy:CL.cfg.defaultPayer||'p_kanwar',date:todayStr(),amount:(c.amt-c.paid)/100};
+  clPayRender();
+}
+function clPayRender(){
+  const P=_clPay; const D=clMonthData(P.month); const c=D.care.find(x=>x.id===P.cid); if(!c)return closeModal();
+  const alloc=clAllocate(toPaise(P.amount),c.sites);
+  openModal(`<div class="modal-title">Pay ${esc(c.name)} — ${monthLabel(P.month)}</div>
+    <div class="muted" style="margin-bottom:10px">${c.n} cleanings · ${inr(c.amt)}${c.paid?' · already paid '+inr(c.paid):''}</div>
+    <div class="form-label">Paid by</div><div class="chips" style="margin-bottom:10px">${partnerList().map(p=>`<span class="pchip ${P.paidBy===p.id?'on':''}" onclick="_clPay.paidBy='${p.id}';clPayRender()">${P.paidBy===p.id?'✓ ':''}${esc(p.name)}</span>`).join('')}</div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Date paid</label><input type="date" class="form-input" id="clp_date" value="${P.date}" onchange="_clPay.date=this.value"></div><div class="form-group"><label class="form-label">Amount (₹)</label><input type="number" step="0.01" inputmode="decimal" class="form-input" id="clp_amt" value="${P.amount}" onchange="_clPay.amount=Number(this.value||0);clPayRender()"></div></div>
+    <div class="form-label">Goes into these sites</div>
+    <div class="card" style="padding:4px 12px">${Object.entries(alloc).map(([sid,p])=>{ const units=Object.entries(c.units).filter(([u])=>(clUnit(u)||{}).siteId===sid).map(([u,n])=>esc(clUnitName(u))+' ×'+n).join(', ');
+      return `<div class="tr-row"><span>${esc((siteById(sid)||{}).name||'?')} <span class="muted">(${units})</span></span><span class="amt">${inr(p)}</span></div>`;}).join('')}</div>
+    <button class="submit-btn" onclick="clPaySave()">✓ Mark paid · ${inr(toPaise(P.amount))}</button><button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
+}
+async function clPaySave(){
+  const P=_clPay; P.date=$('clp_date').value; P.amount=Number($('clp_amt').value||0);
+  if(!P.date){toast('Pick the date');return;} if(!(P.amount>0)){toast('Enter the amount');return;}
+  const D=clMonthData(P.month); const c=D.care.find(x=>x.id===P.cid); if(!c)return;
+  const alloc=clAllocate(toPaise(P.amount),c.sites);
+  for(const sid of Object.keys(alloc)){ const s=siteById(sid); if(!s){toast('Site not found — check Setup');return;} if(!(s.partners||[]).some(p=>p.pid===P.paidBy)){toast(pname(P.paidBy)+' is not a partner in '+s.name);return;} }
+  const pay={id:'pay'+uid(),kind:'pay',by:c.id,byName:c.name,month:P.month,amount:P.amount,date:P.date,paidBy:P.paidBy,perSite:Object.fromEntries(Object.entries(alloc).map(([k,v])=>[k,v/100])),createdBy:ME.name,createdAt:Date.now(),updatedAt:Date.now(),deleted:false};
+  try{ await clPut(CL_COLL,pay); }catch(e){ toast('📶 Not saved — check internet'); return; }
+  CL.list.push(pay);
+  // tag the month's entries as paid so they can't be changed silently afterwards
+  D.ent.filter(e=>e.by===c.id&&!e.payId).forEach(e=>{ e.payId=pay.id; clPut(CL_COLL,{...e}).catch(()=>{}); });
+  Object.entries(alloc).forEach(([sid,p])=>{ const s=siteById(sid); const n=Object.entries(c.units).filter(([u])=>(clUnit(u)||{}).siteId===sid).reduce((a,[,k])=>a+k,0);
+    saveRecord('expenses',{id:'clp_'+pay.id+'_'+sid,siteId:sid,date:P.date,amount:p/100,category:'Cleaning',vendor:c.name,kind:'run',paidBy:[{pid:P.paidBy,amount:p/100}],
+      note:`Cleaning – ${c.name} (${monthLabel(P.month)}) · ${n} cleaning${n!==1?'s':''}`,split:null,stampedSplit:s.expenseSplit.map(y=>({pid:y.pid,pct:y.pct})),receipt:'',payRef:pay.id},ME.name); });
+  logAction(ME.name,`Cleaning: paid ${c.name} ${inr(toPaise(P.amount))} for ${monthLabel(P.month)} (paid by ${pname(P.paidBy)}) — ${Object.entries(alloc).map(([s,p])=>(siteById(s)||{}).name+' '+inr(p)).join(', ')}`);
+  closeModal(); render(); toast('✓ Paid · added to site expenses');
+}
+async function clUndoPay(pid){
+  const p=CL.list.find(x=>x.id===pid); if(!p)return;
+  if(!confirm('Undo the '+inr(toPaise(p.amount))+' payment to '+p.byName+'? Its site expenses will be removed.'))return;
+  try{ await clPut(CL_COLL,{...p,deleted:true,updatedAt:Date.now()}); }catch(e){ toast('📶 Not saved — check internet'); return; }
+  p.deleted=true;
+  CL.list.filter(e=>e.payId===pid).forEach(e=>{ delete e.payId; clPut(CL_COLL,{...e,payId:null}).catch(()=>{}); });
+  DB.expenses.filter(x=>!x.deleted&&x.payRef===pid).forEach(x=>deleteRecord('expenses',x.id,ME.name));
+  logAction(ME.name,'Cleaning: undid payment '+inr(toPaise(p.amount))+' to '+p.byName+' ('+monthLabel(p.month)+')');
+  render(); toast('Payment undone');
+}
+/* Setup: units → sites, caretakers + rate, companies, default payer */
+let _clCfg=null;
+function clSetup(){ _clCfg=JSON.parse(JSON.stringify(CL.cfg)); clSetupRender(); }
+function clSetupRender(){
+  const C=_clCfg; const sites=siteList();
+  openModal(`<div class="modal-title">⚙️ Cleaning setup</div>
+   <div class="form-label">Units → which site's books</div>
+   ${C.units.map((u,i)=>`<div class="split-row"><input class="form-input" style="flex:1" value="${esc(u.name)}" onchange="_clCfg.units[${i}].name=this.value"><select class="form-select" style="flex:1.2" onchange="_clCfg.units[${i}].siteId=this.value"><option value="">— choose site —</option>${sites.map(s=>`<option value="${s.id}" ${u.siteId===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select><button class="mini-btn del" onclick="_clCfg.units.splice(${i},1);clSetupRender()">✕</button></div>`).join('')}
+   <button class="mini-btn edit" onclick="_clCfg.units.push({id:'u_'+uid(),name:'',siteId:''});clSetupRender()">+ Add unit</button>
+   <div class="form-label" style="margin-top:14px">Caretakers · ₹ per unit cleaned</div>
+   ${C.caretakers.map((c,i)=>c.active===false?'':`<div class="split-row"><input class="form-input" style="flex:1.4" value="${esc(c.name)}" onchange="_clCfg.caretakers[${i}].name=this.value"><input class="form-input" type="number" inputmode="decimal" style="flex:.8" value="${c.rate}" onchange="_clCfg.caretakers[${i}].rate=Number(this.value||0)"><button class="mini-btn del" onclick="_clCfg.caretakers[${i}].active=false;clSetupRender()">✕</button></div>`).join('')}
+   <button class="mini-btn edit" onclick="_clCfg.caretakers.push({id:'c_'+uid(),name:'',rate:100,active:true});clSetupRender()">+ Add caretaker</button>
+   <div class="muted" style="font-size:11.5px;margin:4px 0 0">A new rate applies to cleanings marked from now on.</div>
+   <div class="form-group" style="margin-top:14px"><label class="form-label">Cleaning companies (comma separated)</label><input class="form-input" value="${esc((C.companies||[]).join(', '))}" onchange="_clCfg.companies=this.value.split(',').map(x=>x.trim()).filter(Boolean)"></div>
+   <div class="form-label">Usually paid by</div><div class="chips" style="margin-bottom:12px">${partnerList().map(p=>`<span class="pchip ${C.defaultPayer===p.id?'on':''}" onclick="_clCfg.defaultPayer='${p.id}';clSetupRender()">${C.defaultPayer===p.id?'✓ ':''}${esc(p.name)}</span>`).join('')}</div>
+   <button class="submit-btn" onclick="clSetupSave()">Save setup</button><button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
+}
+async function clSetupSave(){
+  const C=_clCfg;
+  C.units=C.units.filter(u=>u.name.trim()); C.caretakers=C.caretakers.filter(c=>c.name.trim()||c.active===false);
+  if(!C.units.length){toast('Add at least one unit');return;}
+  if(!(C.companies||[]).length) C.companies=['Snabbit'];
+  C.partners=partnerList().map(p=>({id:p.id,name:p.name}));
+  try{ await clPut(CL_CFG,{id:'main',...C}); }catch(e){ toast('📶 Not saved — check internet'); return; }
+  CL.cfg=C; CL.list.forEach(e=>{ if(e.by==='ext'&&e._err) e.postedAt=0; }); clReconcile();
+  logAction(ME.name,'Cleaning setup updated'); closeModal(); render(); toast('✓ Setup saved');
+}
+
 setConflictHandler((kind,mine,theirs)=>{
   toast('⚠️ Someone else just changed this '+kind.replace(/s$/,'')+'. Showing their version — please re-check and redo your edit.',5200);
   if(typeof render==='function') render();
 });
 // keep in sync while the app is open: pull every 25 s and whenever the tab comes back to the foreground
-setInterval(()=>{ if(ME&&!document.getElementById('modal').classList.contains('open')){ pullAll().then(()=>render()); } },25000);
-document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&ME){ flushQueue(); pullAll().then(()=>{ if(!document.getElementById('modal').classList.contains('open')) render(); }); } });
+setInterval(()=>{ if(ME&&!isCleaner()&&!document.getElementById('modal').classList.contains('open')){ pullAll().then(()=>clLoad()).then(()=>render()); } },25000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&ME&&isCleaner()){ if(!CLF||!CLF.id) clLoad().then(()=>{ if(!CLF||(!CLF.units.length&&!CLF.id)) render(); }); return; } if(!document.hidden&&ME){ flushQueue(); pullAll().then(()=>{ if(!document.getElementById('modal').classList.contains('open')) render(); }); } });
 window.addEventListener('online',()=>{ flushQueue(); });
 // restore session in this browser tab
 // stays signed in on this device until "Log out"; an old password session signs in once with the new login
