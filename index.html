@@ -2432,7 +2432,7 @@ async function clLoad(){
       else{ const ps=partnerList().map(p=>({id:p.id,name:p.name})); if(ps.length&&JSON.stringify(ps)!==JSON.stringify(CL.cfg.partners||[])){ CL.cfg.partners=ps; clPut(CL_CFG,{id:'main',...CL.cfg}).catch(()=>{}); } }
       clReconcile();
     }
-  }catch(e){ CL.err=(e&&e.status===403)?'rule':'net'; }
+  }catch(e){ CL.err=(e&&e.status===403)?'rule':'net'; CL.errMsg=(e&&e.status?'HTTP '+e.status:'')+' '+String(e&&e.message||e).slice(0,120); console.error('cleaning load',e); }
   CL.loaded=true;
 }
 const clUnit=id=>((CL.cfg&&CL.cfg.units)||[]).find(u=>u.id===id);
@@ -2564,7 +2564,7 @@ match /sbclean_cfg/{doc} {
 function viewCleaner(){
   if(!CL.loaded) return `<div class="empty"><div class="emo">🧹</div><p>Loading…</p></div>`;
   if(CL.err==='rule') return `<div class="empty"><div class="emo">⛔</div><p>Your login doesn't have access yet.<br>Ask Kanwar to switch on the cleaning register.</p></div>`;
-  if(CL.err) return `<div class="empty"><div class="emo">📶</div><p>No internet.</p><button class="submit-btn" style="max-width:200px;margin:12px auto" onclick="CL.loaded=false;render();clLoad().then(render)">Try again</button></div>`;
+  if(CL.err) return `<div class="empty"><div class="emo">📶</div><p>Couldn't load.<br><small style="color:#999">${esc(CL.errMsg||'')}</small></p><button class="submit-btn" style="max-width:200px;margin:12px auto" onclick="CL.loaded=false;render();clLoad().then(render)">Try again</button></div>`;
   if(!CL.cfg) return `<div class="empty"><div class="emo">⚙️</div><p>Not set up yet — ask Kanwar to open SiteBooks once.</p></div>`;
   if(!CLF) CLF=clNewForm();
   const from=(()=>{const d=new Date();d.setDate(d.getDate()-7);return d.toISOString().slice(0,10);})();
@@ -2593,7 +2593,7 @@ function clShiftMonth(d){ const [y,mo]=CL.month.split('-').map(Number); const t=
 function viewClean(){
   if(!CL.loaded){ if(!clLoad._busy){ clLoad._busy=true; clLoad().then(()=>{clLoad._busy=false;render();}); } return `<div class="empty"><div class="emo">🧹</div><p>Loading…</p></div>`; }
   if(CL.err==='rule') return clRuleHTML();
-  if(CL.err) return `<div class="empty"><div class="emo">📶</div><p>Couldn't load the cleaning register.</p><button class="submit-btn" style="max-width:200px;margin:12px auto" onclick="CL.loaded=false;render()">Try again</button></div>`;
+  if(CL.err) return `<div class="empty"><div class="emo">📶</div><p>Couldn't load the cleaning register.<br><small style="color:#999">${esc(CL.errMsg||'')}</small></p><button class="submit-btn" style="max-width:200px;margin:12px auto" onclick="CL.loaded=false;render()">Try again</button></div>`;
   if(!CL.cfg) return `<div class="empty"><p>Setting up…</p></div>`;
   if(!CL.month) CL.month=monthStr();
   const D=clMonthData(CL.month); const careTot=D.care.reduce((a,c)=>a+c.amt,0);
