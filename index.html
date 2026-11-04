@@ -2630,12 +2630,12 @@ function viewClean(){
   D.care.forEach(c=>{
     const due=c.amt-c.paid; const uTxt=Object.entries(c.units).map(([u,n])=>esc(clUnitName(u))+' ×'+n).join(' · ');
     const rate=(clCare(c.id)||{}).rate;
-    h+=`<div class="card"><div style="display:flex;justify-content:space-between;gap:8px"><div><div style="font-weight:900;font-size:15px">${esc(c.name)}</div><div class="muted">${c.n} cleaning${c.n!==1?'s':''}${rate!=null?' · ₹'+rate+' each':''}</div></div><div style="font-weight:900;font-size:18px">${inr(c.amt)}</div></div>
+    h+=`<div class="card" style="cursor:pointer" onclick="clStatement('${c.id}')"><div style="display:flex;justify-content:space-between;gap:8px"><div><div style="font-weight:900;font-size:15px">${esc(c.name)} <span class="muted" style="font-weight:700">›</span></div><div class="muted">${c.n} cleaning${c.n!==1?'s':''}${rate!=null?' · ₹'+rate+' each':''} · tap for days</div></div><div style="font-weight:900;font-size:18px">${inr(c.amt)}</div></div>
       ${uTxt?`<div class="muted" style="margin:6px 0">${uTxt}</div>`:''}
-      ${c.pays.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px"><span class="tagsplit" style="background:#e8f7ee;color:var(--green);font-weight:800">✓ ${inr(toPaise(p.amount))} paid ${fmtDate(p.date)} by ${esc(clPartnerName(p.paidBy))}</span><button class="mini-btn del" onclick="clUndoPay('${p.id}')">Undo</button></div>`).join('')}
-      ${due>0?`<button class="submit-btn" style="margin-top:10px;padding:10px" onclick="clPayOpen('${c.id}')">Mark paid · ${inr(due)}</button>`:due<0?`<div class="muted" style="margin-top:6px;color:var(--red)">Paid ${inr(-due)} more than the cleanings marked</div>`:c.pays.length?'':''}</div>`;
+      ${c.pays.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px"><span class="tagsplit" style="background:#e8f7ee;color:var(--green);font-weight:800">✓ ${inr(toPaise(p.amount))} paid ${fmtDate(p.date)} by ${esc(clPartnerName(p.paidBy))}</span><button class="mini-btn del" onclick="event.stopPropagation();clUndoPay('${p.id}')">Undo</button></div>`).join('')}
+      ${due>0?`<button class="submit-btn" style="margin-top:10px;padding:10px" onclick="event.stopPropagation();clPayOpen('${c.id}')">Mark paid · ${inr(due)}</button>`:due<0?`<div class="muted" style="margin-top:6px;color:var(--red)">Paid ${inr(-due)} more than the cleanings marked</div>`:c.pays.length?'':''}</div>`;
   });
-  if(D.ext.length) h+=`<div class="card"><div style="display:flex;justify-content:space-between"><div><div style="font-weight:900;font-size:15px">Snabbit / Urban Company</div><div class="muted">${D.ext.length} booking${D.ext.length!==1?'s':''} · already in site expenses</div></div><div style="font-weight:900;font-size:18px">${inr(D.extTot)}</div></div>
+  if(D.ext.length) h+=`<div class="card" style="cursor:pointer" onclick="clStatement('ext')"><div style="display:flex;justify-content:space-between"><div><div style="font-weight:900;font-size:15px">Snabbit / Urban Company <span class="muted" style="font-weight:700">›</span></div><div class="muted">${D.ext.length} booking${D.ext.length!==1?'s':''} · already in site expenses</div></div><div style="font-weight:900;font-size:18px">${inr(D.extTot)}</div></div>
      <div class="muted" style="margin-top:6px">${Object.entries(D.extSites).map(([s,p])=>esc((siteById(s)||{}).name||'?')+' '+inr(p)).join(' · ')}</div></div>`;
   if(D.ent.length){
     h+=`<div class="sec-hdr" style="cursor:pointer" onclick="CL.all=!CL.all;render()">Every entry (${D.ent.length}) <span class="muted">${CL.all?'▲ hide':'▼ show'}</span></div>`;
@@ -2643,6 +2643,48 @@ function viewClean(){
   }
   return h;
 }
+/* One person's month: day-by-day list, total, paid, balance — with WhatsApp share */
+function _clStmt(cid){
+  const D=clMonthData(CL.month); const ext=cid==='ext';
+  const rows=D.ent.filter(e=>ext?e.by==='ext':e.by===cid).sort((a,b)=>a.date.localeCompare(b.date)||(a.createdAt||0)-(b.createdAt||0));
+  const c=ext?null:D.care.find(x=>x.id===cid);
+  const name=ext?'Snabbit / Urban Company':(c?c.name:((clCare(cid)||{}).name||''));
+  const total=rows.reduce((a,e)=>a+clCost(e),0); const n=ext?rows.length:rows.reduce((a,e)=>a+(e.units||[]).length,0);
+  const pays=ext?[]:(c?c.pays:[]); const paid=pays.reduce((a,p)=>a+toPaise(p.amount),0);
+  return {ext,rows,name,total,n,pays,paid};
+}
+const _dd=d=>{ const [y,m,dd]=d.split('-'); return dd+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]; };
+function clStmtText(cid){
+  const S=_clStmt(cid); const L=[];
+  L.push(`*${S.name} — Cleaning, ${monthLabel(CL.month)}*`,'');
+  S.rows.forEach(e=>{ const u=(e.units||[]).map(x=>clUnitName(x,e)).join(', ');
+    L.push(`${_dd(e.date)} · ${u}${S.ext?' ('+(e.company||'')+')':''} — ${inr(clCost(e))}`); });
+  L.push('');
+  if(S.ext) L.push(`*Total: ${S.n} booking${S.n!==1?'s':''} = ${inr(S.total)}*`);
+  else{
+    const rates=[...new Set(S.rows.map(e=>Number(e.rate||0)))];
+    L.push(`*Total: ${S.n} cleaning${S.n!==1?'s':''}${rates.length===1?' × ₹'+rates[0]:''} = ${inr(S.total)}*`);
+    S.pays.forEach(p=>L.push(`Paid ${_dd(p.date)}: ${inr(toPaise(p.amount))}`));
+    L.push(`*Balance: ${inr(S.total-S.paid)}*`);
+  }
+  L.push('','— K.D. Constructions');
+  return L.join('\n');
+}
+function clStatement(cid){
+  const S=_clStmt(cid);
+  const byDay={}; S.rows.forEach(e=>{ (byDay[e.date]=byDay[e.date]||[]).push(e); });
+  openModal(`<div class="modal-title">${esc(S.name)} — ${monthLabel(CL.month)}</div>
+    <div class="muted" style="margin-bottom:10px">${S.ext?S.n+' booking'+(S.n!==1?'s':''):S.n+' cleaning'+(S.n!==1?'s':'')} · ${Object.keys(byDay).length} day${Object.keys(byDay).length!==1?'s':''}</div>
+    <div class="card" style="padding:4px 12px">${Object.entries(byDay).map(([d,es])=>es.map((e,i)=>`<div class="tr-row" style="align-items:flex-start"><span><b>${i===0?_dd(d):''}</b>${i===0?'<br>':''}<span class="muted">${esc((e.units||[]).map(x=>clUnitName(x,e)).join(', '))}${S.ext?' · '+esc(e.company||''):''}${e.createdBy?' · by '+esc(e.createdBy):''}</span></span><span class="amt">${inr(clCost(e))}</span></div>`).join('')).join('')||'<div class="muted" style="padding:8px 0">No entries this month.</div>'}</div>
+    <div class="card"><div class="tr-row"><span><b>Total</b></span><span class="amt"><b>${inr(S.total)}</b></span></div>
+      ${S.pays.map(p=>`<div class="tr-row"><span class="muted">Paid ${fmtDate(p.date)} · ${esc(clPartnerName(p.paidBy))}</span><span class="amt g">−${inr(toPaise(p.amount))}</span></div>`).join('')}
+      ${S.ext?'<div class="muted" style="margin-top:4px">Already added to site expenses</div>':`<div class="tr-row"><span><b>Balance</b></span><span class="amt ${S.total-S.paid>0?'r':'g'}"><b>${inr(S.total-S.paid)}</b></span></div>`}</div>
+    <button class="submit-btn" style="background:#1f8f4e" onclick="clShareStmt('${cid}')">📤 Share on WhatsApp</button>
+    <button class="cancel-btn" onclick="clCopyStmt('${cid}')">📋 Copy text</button>
+    <button class="cancel-btn" onclick="closeModal()">Close</button>`);
+}
+function clShareStmt(cid){ const t=clStmtText(cid); const w=window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank'); if(!w) clCopyStmt(cid); }
+async function clCopyStmt(cid){ const t=clStmtText(cid); try{ await navigator.clipboard.writeText(t); toast('📋 Copied'); }catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');toast('📋 Copied');}catch(_){} ta.remove(); } }
 /* Mark paid: proportional to cleanings per site this month */
 function clAllocate(amountP,weights){
   const ks=Object.keys(weights).filter(k=>weights[k]>0); const W=ks.reduce((a,k)=>a+weights[k],0); const out={}; if(!W) return out;
