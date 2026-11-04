@@ -97,6 +97,17 @@ body{background:#f0f2f8;color:#1c1d2e;max-width:480px;margin:0 auto;display:flex
 .chk{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer}.chk input{width:18px;height:18px}
 img.rc{max-width:100%;max-height:150px;border-radius:10px;margin-top:8px;border:1px solid var(--border)}
 #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1c1d2e;color:#fff;padding:10px 18px;border-radius:24px;font-size:13px;font-weight:700;opacity:0;transition:opacity .25s;z-index:999;pointer-events:none;max-width:88%;text-align:center}
+/* quick add + split across sites */
+.qa-row{display:flex;gap:8px;margin:0 0 8px}.qa-row button{flex:1;padding:13px 6px;border-radius:14px;font-weight:900;font-size:15px;border:0;cursor:pointer;font-family:inherit}
+.qa-exp{background:#fdecea;color:#c0392b}.qa-inc{background:#e8f7ee;color:#1e8449}
+.site-pick{display:block;width:100%;text-align:left;padding:13px 14px;margin:0 0 8px;border-radius:12px;border:1.5px solid #e3e6f0;background:#f8f9fb;font-weight:800;font-size:15px;cursor:pointer;font-family:inherit;color:var(--text)}
+.site-pick.split{background:var(--bluebg);border-color:var(--blue);color:var(--blue)}
+.site-line{font-size:12.5px;color:var(--text2);margin:-4px 0 10px}.site-line a{color:var(--blue);font-weight:800;cursor:pointer;margin-left:6px}
+.ms-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #eef0f5}.ms-row:last-child{border:0}
+.ms-row input[type=checkbox]{width:20px;height:20px;flex:none}.ms-row .nm{flex:1;font-weight:700;font-size:13.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ms-row input[type=number]{width:110px;flex:none}
+.ms-box{border:1.5px solid var(--blue);background:#f7fbff;border-radius:12px;padding:8px 10px;margin:0 0 12px}
+.tagsplit{background:var(--bluebg);color:var(--blue);padding:1px 6px;border-radius:6px;font-size:10px}
 </style>
 </head>
 <body>
@@ -729,6 +740,7 @@ function viewHome(){
     h+=`<div class="card" style="text-align:center;color:var(--green);font-weight:700">✅ Everyone is settled up</div>`;
   }
   h=backupNudgeHTML()+plHomeStrip()+h;
+  h+=`<div class="qa-row"><button class="qa-exp" onclick="quickAdd('exp')">＋ Expense</button><button class="qa-inc" onclick="quickAdd('inc')">＋ Income</button></div>`;
   h+=`<button class="cancel-btn" style="margin:0 0 4px;background:var(--bluebg);color:var(--blue);border-color:var(--blue)" onclick="openCsvImport()">⬆️ Import Airbnb CSV</button>`;
   h+=`<div class="sec-hdr">Sites <button class="add-btn" onclick="openAddSite()">+ Add</button></div>`;
   h+=all.per.map(({site,res})=>siteCard(site,res)).join('');
@@ -747,6 +759,7 @@ function viewSites(){
   const sites=siteList();
   let h=`<div class="sec-hdr">All Sites <span><button class="add-btn" style="background:var(--bluebg);color:var(--blue)" onclick="openCsvImport()">⬆️ Airbnb CSV</button> <button class="add-btn" onclick="openAddSite()">+ Add</button></span></div>`;
   if(!sites.length) return h+`<div class="empty"><div class="emo">🏗️</div><p>No sites yet.</p></div>`;
+  h=`<div class="qa-row"><button class="qa-exp" onclick="quickAdd('exp')">＋ Expense</button><button class="qa-inc" onclick="quickAdd('inc')">＋ Income</button></div>`+h;
   const all=overallForRange('','');
   return h+all.per.map(({site,res})=>siteCard(site,res)).join('');
 }
@@ -895,7 +908,7 @@ function siteExpensesHTML(s){
   if(!list.length) return h+`<div class="empty"><div class="emo">💸</div><p>No expenses yet.</p></div>`;
   return h+list.map(e=>`<div class="entry" onclick="openExpenseForm('${s.id}','${e.id}')">
     <div class="entry-l"><div class="entry-t">${esc(e.note||e.category||'Expense')}</div>
-      <div class="entry-s">${e.category?esc(e.category)+' · ':''}${e.vendor?esc(e.vendor)+' · ':''}${fmtDate(e.date)}${e.kind==='setup'?' · <b class="tagsetup">SETUP</b>':''}${e.split&&e.split.length?' · <b class="tagov">CUSTOM SPLIT</b>':''}</div>
+      <div class="entry-s">${e.category?esc(e.category)+' · ':''}${e.vendor?esc(e.vendor)+' · ':''}${fmtDate(e.date)}${e.kind==='setup'?' · <b class="tagsetup">SETUP</b>':''}${e.split&&e.split.length?' · <b class="tagov">CUSTOM SPLIT</b>':''}${(()=>{const g=groupInfo(e);return g?` · <b class="tagsplit">🔗 ${inr(g.total)} ÷ ${g.n} SITES</b>`:'';})()}</div>
       <div class="entry-s">Paid by ${paidByText(e.paidBy)}</div></div><div class="entry-a r">${inr(toPaise(e.amount))}</div></div>`).join('');
 }
 function siteIncomeHTML(s){
@@ -931,18 +944,36 @@ function lineTotals(prefix){
   el.className='split-total '+(good?'ok':'bad');
   el.textContent=need? (good?'Adds up ✓':`Lines total ${inr(sum)} · need ${inr(need)}`) : '';
 }
-function onAmountInput(){ ['pay','rcv','ctb'].forEach(p=>{ if(_lineArr(p).length===1){ const a=$(p+'_a0'); if(a&&(!a.dataset.touched)) a.value=$('f_amount').value; } lineTotals(p); }); }
+function onAmountInput(){ ['pay','rcv','ctb'].forEach(p=>{ if(_lineArr(p).length===1){ const a=$(p+'_a0'); if(a&&(!a.dataset.touched)) a.value=$('f_amount').value; } lineTotals(p); }); if($('f_multi')&&$('f_multi').checked){ if(!_multi.custom){_multiEqualCalc();multiRender();} else multiTotal(); } }
 let _formSite=null;
 function categoryOptions(){ const set=new Set(['Rent','Furniture','Electricity','Water','WiFi / Internet','Cleaning','Repairs','Maintenance','Supplies','Deposit','Commission','Other']); expensesOf(_formSite).forEach(e=>e.category&&set.add(e.category)); DB.expenses.forEach(e=>{if(!e.deleted&&e.category)set.add(e.category);}); return [...set].sort(); }
 
-function openExpenseForm(siteId,id){
+function openExpenseForm(siteId,id,opt){
+  opt=opt||{};
   _formSite=siteId; const s=siteById(siteId); const e=id?DB.expenses.find(x=>x.id===id):null;
   const ids=s.partners.map(p=>p.pid);
   _payLines=e?JSON.parse(JSON.stringify(e.paidBy||[])):[{pid:ids.includes(ME.name&&partnerList().find(p=>p.name===ME.name)?.id)?partnerList().find(p=>p.name===ME.name).id:ids[0],amount:''}];
+  // split across sites: a linked expense opens with the whole group (all sites, total amount, combined paid-by)
+  const gm=e&&e.group?groupMembers(e.group.id):[];
+  const inGroup=gm.length>1;
+  let formAmount=e?.amount||'';
+  if(inGroup){
+    formAmount=gm.reduce((a,m)=>a+toPaise(m.amount),0)/100;
+    const agg={}; gm.forEach(m=>(m.paidBy||[]).forEach(l=>{agg[l.pid]=(agg[l.pid]||0)+toPaise(l.amount);}));
+    _payLines=Object.entries(agg).map(([pid,p])=>({pid,amount:p/100}));
+  }
+  _multi={on:inGroup||!!opt.split,sel:{},custom:false,home:!!opt.home};
+  if(inGroup){ gm.forEach(m=>_multi.sel[m.siteId]=toPaise(m.amount)); const v=Object.values(_multi.sel); _multi.custom=!_eqMatches(v,toPaise(formAmount)); }
+  else if(opt.split){ (opt.all?siteList().filter(x=>x.status!=='Closed'):[s]).forEach(x=>_multi.sel[x.id]=null); }
+  else _multi.sel[siteId]=null;
   const hasOv=!!(e&&e.split&&e.split.length);
   const cats=categoryOptions();
   openModal(`<div class="modal-title">${e?'✏️ Edit Expense':'💸 Add Expense'}</div>
-    <div class="form-row"><div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="f_date" value="${e?.date||todayStr()}"></div><div class="form-group"><label class="form-label">Amount (₹) *</label><input type="number" step="0.01" class="form-input" id="f_amount" inputmode="decimal" value="${e?.amount||''}" oninput="onAmountInput()"></div></div>
+    <div class="site-line" id="f_siteline" style="display:${_multi.on?'none':'block'}">🏠 Site: <b>${esc(s.name)}</b>${opt.home&&!e?`<a onclick="quickAdd('exp')">change</a>`:''}</div>
+    ${inGroup?`<div class="card" style="background:var(--bluebg);color:var(--blue);font-size:12.5px;margin-bottom:10px">🔗 This bill is split across <b>${gm.length} sites</b>. Changes here update all of them. To change only this site's share, untick “Split this bill across sites”.</div>`:''}
+    <div class="form-row"><div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="f_date" value="${e?.date||todayStr()}"></div><div class="form-group"><label class="form-label" id="f_amount_lbl">${_multi.on?'Total bill (₹) *':'Amount (₹) *'}</label><input type="number" step="0.01" class="form-input" id="f_amount" inputmode="decimal" value="${inGroup?formAmount:(e?.amount||'')}" oninput="onAmountInput()"></div></div>
+    ${siteList().length>1?`<label class="chk" style="margin:0 0 8px"><input type="checkbox" id="f_multi" ${_multi.on?'checked':''} onchange="toggleMulti()"> 🔗 Split this bill across sites</label>
+    <div class="ms-box" id="multi_wrap" style="display:${_multi.on?'block':'none'}"><div class="muted" style="font-size:12px;margin-bottom:4px">Tick the sites. Split is equal — type an amount to change the ratio.</div><div id="multi_rows"></div><div class="split-total" id="multi_tot"></div><button class="mini-btn edit" onclick="multiEqual()" style="margin-top:4px">↺ Equal split</button></div>`:''}
     <div class="form-row"><div class="form-group"><label class="form-label">Category</label><input class="form-input" list="catlist" id="f_cat" value="${esc(e?.category||'')}" placeholder="Rent, Furniture…"><datalist id="catlist">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div><div class="form-group"><label class="form-label">Paid to (vendor)</label><input class="form-input" id="f_vendor" value="${esc(e?.vendor||'')}"></div></div>
     <div class="form-group"><label class="form-label">Type</label><select class="form-select" id="f_kind"><option value="run" ${e?.kind!=='setup'?'selected':''}>Running cost (rent, bills, cleaning…)</option><option value="setup" ${e?.kind==='setup'?'selected':''}>Setup / one-time (furniture, deposit, fit-out…)</option></select></div>
     <div class="form-label">Paid by</div><div id="pay_wrap">${linesEditorHTML('pay',_payLines,ids)}</div>
@@ -951,8 +982,105 @@ function openExpenseForm(siteId,id){
     <div class="form-group"><label class="form-label">Note</label><textarea class="form-textarea" id="f_note" placeholder="What was this for?">${esc(e?.note||'')}</textarea></div>
     <div class="form-group"><label class="form-label">Bill / receipt photo (optional)</label><input type="file" accept="image/*" id="f_photo" onchange="pickReceipt(this)"><div id="f_photo_prev">${e?.receipt?`<img class="rc" src="${e.receipt}">`:''}</div></div>
     <button class="submit-btn" onclick="saveExpense('${siteId}','${id||''}')">${e?'Update':'Save'}</button>
-    ${e?`<button class="cancel-btn danger" onclick="removeEntry('expenses','${id}')">Delete</button>`:''}<button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
+    ${e&&inGroup?`<button class="cancel-btn danger" onclick="removeGroup('${e.group.id}')">Delete from all ${gm.length} sites</button><button class="cancel-btn danger" onclick="removeEntry('expenses','${id}')">Delete only ${esc(s.name)}'s share</button>`:e?`<button class="cancel-btn danger" onclick="removeEntry('expenses','${id}')">Delete</button>`:''}<button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
   lineTotals('pay'); if(hasOv) updSplitTotal('ovs');
+  if(_multi.on){ if(!_multi.custom) _multiEqualCalc(); multiRender(); }
+}
+/* ---- split one bill across several sites ----
+   Saving creates one ordinary expense per site (so every site's totals, partner shares and settlements work
+   exactly as before), linked by group.id so they can be edited or deleted together. */
+let _multi={on:false,sel:{},custom:false};
+function groupMembers(gid){ return DB.expenses.filter(x=>!x.deleted&&x.group&&x.group.id===gid); }
+function groupInfo(e){ if(!e.group)return null; const m=groupMembers(e.group.id); if(m.length<2)return null; return {n:m.length,total:m.reduce((a,x)=>a+toPaise(x.amount),0)}; }
+function _eqParts(T,n){ const b=Math.floor(T/n); let r=T-b*n; return Array.from({length:n},()=>b+(r-->0?1:0)); }
+function _eqMatches(v,T){ const e=_eqParts(T,v.length); const sv=v.slice().sort((a,b)=>a-b), se=e.slice().sort((a,b)=>a-b); return sv.every((x,i)=>x===se[i]); }
+function _multiSites(){ const sel=Object.keys(_multi.sel); return siteList().filter(x=>x.status!=='Closed'||sel.includes(x.id)); }
+function _multiPicked(){ return _multiSites().filter(x=>x.id in _multi.sel); }
+function _multiEqualCalc(){ const T=toPaise($('f_amount')?.value||0); const ps=_multiPicked(); const parts=_eqParts(T,ps.length||1); ps.forEach((x,i)=>_multi.sel[x.id]=T?parts[i]:null); }
+function multiRender(){
+  const box=$('multi_rows'); if(!box)return;
+  box.innerHTML=_multiSites().map(x=>{ const on=x.id in _multi.sel; const v=_multi.sel[x.id];
+    return `<div class="ms-row"><input type="checkbox" ${on?'checked':''} onchange="multiTick('${x.id}',this.checked)"><span class="nm">${esc(x.name)}</span>${on?`<input class="form-input" type="number" step="0.01" inputmode="decimal" id="ms_${x.id}" value="${v!=null?(v/100):''}" placeholder="₹" oninput="multiAmt('${x.id}',this.value)">`:''}</div>`; }).join('');
+  multiTotal();
+}
+function multiTotal(){
+  const el=$('multi_tot'); if(!el)return; const T=toPaise($('f_amount')?.value||0); const ps=_multiPicked();
+  const sum=ps.reduce((a,x)=>a+(_multi.sel[x.id]||0),0);
+  const good=T>0&&sum===T&&ps.length>=2&&ps.every(x=>_multi.sel[x.id]>0);
+  el.className='split-total '+(good?'ok':'bad');
+  el.textContent=ps.length<2?'Tick at least 2 sites':!T?'Enter the total bill above':good?`${ps.length} sites · adds up to ${inr(T)} ✓${_multi.custom?'':' (equal)'}`:`Sites total ${inr(sum)} · need ${inr(T)}`;
+}
+function multiTick(sid,on){ if(on)_multi.sel[sid]=null; else delete _multi.sel[sid]; if(!_multi.custom)_multiEqualCalc(); multiRender(); }
+function multiAmt(sid,v){ _multi.sel[sid]=v===''?null:toPaise(v); _multi.custom=true; multiTotal(); }
+function multiEqual(){ _multi.custom=false; _multiEqualCalc(); multiRender(); }
+function toggleMulti(){
+  _multi.on=$('f_multi').checked;
+  if(_multi.on&&!Object.keys(_multi.sel).length) _multi.sel[_formSite]=null;
+  $('multi_wrap').style.display=_multi.on?'block':'none'; $('f_siteline').style.display=_multi.on?'none':'block';
+  $('f_amount_lbl').textContent=_multi.on?'Total bill (₹) *':'Amount (₹) *';
+  if(_multi.on){ if(!_multi.custom)_multiEqualCalc(); multiRender(); }
+}
+function removeGroup(gid){
+  const m=groupMembers(gid); if(!m.length)return;
+  const tot=m.reduce((a,x)=>a+toPaise(x.amount),0);
+  if(!confirm('Delete this '+inr(tot)+' bill from all '+m.length+' sites? It will be removed from their totals and logged.'))return;
+  m.forEach(x=>deleteRecord('expenses',x.id,ME.name));
+  logAction(ME.name,'Deleted split expense '+inr(tot)+' from '+m.length+' sites ('+m.map(x=>siteById(x.siteId)?.name||'').join(', ')+')');
+  closeModal(); render(); toast('Deleted from '+m.length+' sites');
+}
+function saveExpenseGroup(siteId,id){
+  const amount=Number($('f_amount').value||0); if(!(amount>0)){toast('Enter the total bill');return;}
+  const date=$('f_date').value; if(!date){toast('Pick a date');return;}
+  const T=toPaise(amount);
+  const paidBy=readLines('pay',_payLines.length).filter(l=>l.amount>0);
+  const v=validateLines(paidBy,amount,'Paid by'); if(!v.ok){toast(v.msg);return;}
+  const picks=_multiPicked().map(x=>({site:x,p:_multi.sel[x.id]||0}));
+  if(picks.length<2){toast('Tick at least 2 sites — or untick “Split this bill across sites”');return;}
+  if(picks.some(x=>!(x.p>0))){toast('Every ticked site needs an amount');return;}
+  const sum=picks.reduce((a,x)=>a+x.p,0); if(sum!==T){toast('Site amounts add up to '+inr(sum)+' — the bill is '+inr(T));return;}
+  for(const x of picks){ const pids=(x.site.partners||[]).map(p=>p.pid); const bad=paidBy.find(l=>!pids.includes(l.pid)); if(bad){toast(pname(bad.pid)+' is not a partner in '+x.site.name);return;} }
+  let split=null;
+  if($('f_ov').checked){
+    const ids=siteById(siteId).partners.map(p=>p.pid); split=readSplit('ovs',ids); const vs=validateShares(split); if(!vs.ok){toast('Custom split: '+vs.msg);return;} split=split.filter(x=>x.pct>0);
+    for(const x of picks){ const pids=(x.site.partners||[]).map(p=>p.pid); if(split.some(sh=>!pids.includes(sh.pid))){toast('Custom split: '+x.site.name+' has different partners');return;} }
+  }
+  // share "paid by" across the sites in proportion; the last site takes the rounding paise so every total is exact
+  const left={}; paidBy.forEach(l=>left[l.pid]=(left[l.pid]||0)+toPaise(l.amount));
+  picks.forEach((x,i)=>{
+    let lines;
+    if(i===picks.length-1) lines=Object.entries(left).map(([pid,a])=>({pid,a}));
+    else{ lines=paidBy.map(l=>({pid:l.pid,a:Math.round(toPaise(l.amount)*x.p/T)})); const d=x.p-lines.reduce((a,l)=>a+l.a,0); lines[lines.length-1].a+=d; }
+    lines.forEach(l=>left[l.pid]-=l.a);
+    x.paidBy=lines.filter(l=>l.a!==0).map(l=>({pid:l.pid,amount:l.a/100}));
+  });
+  const old=id?DB.expenses.find(x=>x.id===id):null;
+  const gid=(old&&old.group&&old.group.id)||uid();
+  const members=old?(old.group?groupMembers(gid):[old]):[];
+  const common={date,category:$('f_cat').value.trim(),vendor:$('f_vendor').value.trim(),kind:$('f_kind').value,note:$('f_note').value.trim(),split:split||null};
+  picks.forEach(x=>{
+    const ex=members.find(m=>m.siteId===x.site.id);
+    const rec={...(ex||{id:uid()}),siteId:x.site.id,amount:x.p/100,paidBy:x.paidBy,...common,
+      stampedSplit:(ex&&ex.stampedSplit&&ex.stampedSplit.length&&!split)?ex.stampedSplit:x.site.expenseSplit.map(y=>({pid:y.pid,pct:y.pct})),
+      receipt:_receipt||ex?.receipt||old?.receipt||'',
+      group:{id:gid,total:amount,n:picks.length}};
+    saveRecord('expenses',rec,ME.name);
+  });
+  members.filter(m=>!picks.some(x=>x.site.id===m.siteId)).forEach(m=>deleteRecord('expenses',m.id,ME.name));
+  if(_receipt) setTimeout(sbDriveRun,8000); _receipt='';
+  logAction(ME.name,(old?'Edited':'Added')+' split expense '+inr(T)+' across '+picks.length+' sites ('+picks.map(x=>x.site.name+' '+inr(x.p)).join(', ')+') — '+(common.category||common.note||''));
+  closeModal(); render(); toast((old?'Updated':'Saved')+' in '+picks.length+' sites');
+}
+/* ---- quick add from the main page: pick the site, then the normal form ---- */
+function quickAdd(kind){
+  const all=siteList(); if(!all.length){toast('Add a site first');return;}
+  const act=all.filter(x=>x.status!=='Closed'), closed=all.filter(x=>x.status==='Closed');
+  const btn=x=>`<button class="site-pick" onclick="${kind==='exp'?`openExpenseForm('${x.id}',null,{home:1})`:`openIncomeForm('${x.id}',null,{home:1})`}">🏠 ${esc(x.name)}${x.status==='Closed'?' <span class="muted">(closed)</span>':''}</button>`;
+  openModal(`<div class="modal-title">${kind==='exp'?'💸 Add Expense':'💰 Add Money Received'}</div>
+    <div class="form-label">Which site?</div>
+    ${act.map(btn).join('')}
+    ${kind==='exp'&&act.length>1?`<button class="site-pick split" onclick="openExpenseForm('${act[0].id}',null,{home:1,split:true,all:true})">🔗 Split one bill across sites</button>`:''}
+    ${closed.length?`<details style="margin:4px 0 8px"><summary class="muted" style="cursor:pointer">Closed sites (${closed.length})</summary><div style="margin-top:8px">${closed.map(btn).join('')}</div></details>`:''}
+    <button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
 }
 function toggleOverride(){ $('ov_wrap').style.display=$('f_ov').checked?'block':'none'; if($('f_ov').checked) updSplitTotal('ovs'); }
 let _receipt='';
@@ -963,6 +1091,7 @@ async function pickReceipt(inp){
 function compressImage(file,maxW,q){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=e=>{ const img=new Image(); img.onload=()=>{ const k=Math.min(maxW/img.width,maxW/img.height,1); const c=document.createElement('canvas'); c.width=img.width*k; c.height=img.height*k; c.getContext('2d').drawImage(img,0,0,c.width,c.height); res(c.toDataURL('image/jpeg',q)); }; img.onerror=rej; img.src=e.target.result; }; r.onerror=rej; r.readAsDataURL(file); }); }
 
 function saveExpense(siteId,id){
+  if($('f_multi')&&$('f_multi').checked) return saveExpenseGroup(siteId,id);
   const s=siteById(siteId); const amount=Number($('f_amount').value||0); if(!(amount>0)){toast('Enter the amount');return;}
   const date=$('f_date').value; if(!date){toast('Pick a date');return;}
   const paidBy=readLines('pay',_payLines.length).filter(l=>l.amount>0);
@@ -975,6 +1104,7 @@ function saveExpense(siteId,id){
     split:split||null,
     stampedSplit:(old&&old.stampedSplit&&old.stampedSplit.length&&!$('f_ov').checked)?old.stampedSplit:s.expenseSplit.map(x=>({pid:x.pid,pct:x.pct})),
     receipt:_receipt||old?.receipt||''};
+  if(old&&old.group){ rec.group=null; if(groupMembers(old.group.id).length>1) toast('This site’s share is now separate from the split bill'); }
   saveRecord('expenses',rec,ME.name); if(rec.receipt) setTimeout(sbDriveRun,8000); _receipt='';
   logAction(ME.name,(old?'Edited':'Added')+' expense '+inr(toPaise(amount))+' — '+(rec.category||rec.note||''),siteId);
   closeModal(); render(); toast(old?'Updated':'Expense saved');
@@ -987,13 +1117,15 @@ function removeEntry(kind,id){
 }
 
 /* ---- income form ---- */
-function openIncomeForm(siteId,id){
+function openIncomeForm(siteId,id,opt){
+  opt=opt||{};
   _formSite=siteId; const s=siteById(siteId); const e=id?DB.incomes.find(x=>x.id===id):null;
   const ids=s.partners.map(p=>p.pid); const me=partnerList().find(p=>p.name===ME.name)?.id;
   _recvLines=e?JSON.parse(JSON.stringify(e.receivedBy||[])):[{pid:ids.includes(me)?me:ids[0],amount:''}];
   _contribLines=e&&e.contributedBy?JSON.parse(JSON.stringify(e.contributedBy)):[{pid:ids.includes(me)?me:ids[0],amount:''}];
   const kind=e?.kind||'booking';
   openModal(`<div class="modal-title">${e?'✏️ Edit':'💰 Add'} Money Received</div>
+    ${opt.home?`<div class="site-line">🏠 Site: <b>${esc(s.name)}</b>${!e?`<a onclick="quickAdd('inc')">change</a>`:''}</div>`:''}
     <div class="form-group"><label class="form-label">What is it?</label><select class="form-select" id="f_ikind" onchange="onIncomeKind()">
       <option value="booking" ${kind==='booking'?'selected':''}>Booking / rental income</option>
       <option value="capital" ${kind==='capital'?'selected':''}>Partner capital (a partner handing money in)</option>
