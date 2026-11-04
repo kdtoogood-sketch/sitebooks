@@ -412,7 +412,7 @@ const objToDoc=o=>({fields:Object.fromEntries(Object.entries(o).filter(([,x])=>x
 const DB={partners:[],sites:[],expenses:[],incomes:[],settlements:[],log:[],purchases:[]};
 const LS_KEY='sitebooks_cache_v1';
 function cacheSave(){ try{localStorage.setItem(LS_KEY,JSON.stringify(DB));}catch(e){} }
-function cacheLoad(){ try{const r=localStorage.getItem(LS_KEY); if(r){const o=JSON.parse(r); KINDS.forEach(k=>{DB[k]=o[k]||[];});}}catch(e){} }
+function cacheLoad(){ try{const r=localStorage.getItem(LS_KEY); if(!r){ lastPull=0; } if(r){const o=JSON.parse(r); KINDS.forEach(k=>{DB[k]=o[k]||[];});}}catch(e){} }
 
 /* pending write queue: survives offline, retried on next tick */
 const QUEUE_KEY='sitebooks_queue_v1';
@@ -529,20 +529,42 @@ function setConflictHandler(fn){ onConflict=fn; }
 
 /* Pull everything from the server and merge. A locally-queued (unsent) record always wins over the
    server copy so we never clobber a pending edit with stale data. */
-let lastPull=0;
-async function pullAll(){
+/* Reads are counted against a shared daily free limit (all the apps share one Firebase project), so after the
+   first load only records CHANGED since the last check are fetched (every save stamps updatedAt). A full read
+   happens on a fresh phone, once a day per phone, and before backups/restores. A 15-minute overlap covers
+   phones whose clocks are slightly off. */
+const PULL_KEY='sitebooks_pull_v1';
+let lastPull=0, lastFull=0;
+try{ const p=JSON.parse(localStorage.getItem(PULL_KEY)||'{}'); lastPull=p.lastPull||0; lastFull=p.lastFull||0; }catch(e){}
+function _pullSave(){ try{ localStorage.setItem(PULL_KEY,JSON.stringify({lastPull,lastFull})); }catch(e){} }
+async function fsChangedSince(kind,since){
+  const r=await fetch(`${FB_BASE}:runQuery`,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({structuredQuery:{from:[{collectionId:COLL(kind)}],where:{fieldFilter:{field:{fieldPath:'updatedAt'},op:'GREATER_THAN_OR_EQUAL',value:{integerValue:String(Math.max(0,Math.floor(since)))}}}}})});
+  if(!r.ok) throw new Error('query '+kind+' '+r.status);
+  const arr=await r.json();
+  return (Array.isArray(arr)?arr:[]).filter(x=>x&&x.document).map(x=>{ const o=docToObj(x.document); o.id=x.document.name.split('/').pop(); return o; });
+}
+let _pullBusy=null;
+async function pullAll(forceFull){
+  if(_pullBusy&&!forceFull) return _pullBusy;
+  const run=(async()=>{
   try{
     const pending=new Set(queue.map(q=>q.kind+':'+q.id));
+    const haveCache=KINDS.some(k=>DB[k]&&DB[k].length);
+    const full=forceFull||!lastPull||!haveCache||(Date.now()-lastFull>20*3600*1000);
+    const started=Date.now();
     for(const k of KINDS){
-      const remote=await fsList(k);
-      const remoteIds=new Set(remote.map(r=>r.id));
+      const remote=full?await fsList(k):await fsChangedSince(k,lastPull-15*60*1000);
       remote.forEach(r=>{ if(!pending.has(k+':'+r.id)) upsertLocal(k,r); });
       // records we have locally that the server doesn't and aren't pending: leave (could be mid-write)
     }
-    cacheSave(); lastPull=Date.now();
+    cacheSave(); lastPull=started; if(full) lastFull=started; _pullSave();
     if(!queue.length) setSync('synced');
     return true;
   }catch(e){ setSync('error'); return false; }
+  })();
+  _pullBusy=run; run.finally(()=>{ if(_pullBusy===run) _pullBusy=null; });
+  return run;
 }
 
 /* ---- activity log ---- */
@@ -1882,7 +1904,7 @@ function backupData(){
 async function _sbdDaily(){
   const today=todayStr();
   if(_sbd.lastDaily===today) return;
-  await pullAll();                                   // back up the latest shared data, not just this phone's copy
+  await pullAll(true);                               // back up the latest shared data, not just this phone's copy
   await _sbdSet({lastDaily:today}); _sbd.lastDaily=today;   // claim today first so two phones don't both send
   const stamp=today+' '+new Date().toTimeString().slice(0,5).replace(':','.');
   try{ await _sbdPost({action:'backup',folder:'SiteBooks/Backups',year:today.slice(0,4),fileName:'SiteBooks backup '+stamp+'.json',data:'data:application/json;base64,'+_sbB64(JSON.stringify(backupData()))}); }
@@ -2003,7 +2025,7 @@ async function doRestore(mode){
   const d=_restoreData; if(!d) return;
   if(!confirm(mode==='replace'?'Replace current data with this backup? All three partners will see the restored data.':'Bring back records from the backup that are missing or deleted in the app?')) return;
   toast('Restoring… keep the app open',4000);
-  await pullAll();                                   // start from the latest server copy so revisions line up
+  await pullAll(true);                               // start from the latest server copy so revisions line up
   let changed=0;
   const put=(k,rec)=>{ const ex=findLocal(k,rec.id); const out={...rec,rev:(ex?.rev||0)+1,restoredAt:Date.now(),restoredBy:ME.name};
     upsertLocal(k,out); queue=queue.filter(q=>!(q.kind===k&&q.id===out.id)); queue.push({kind:k,id:out.id,baseRev:ex?.rev||0}); changed++; };
@@ -2433,7 +2455,7 @@ async function clLoad(){
       clReconcile();
     }
   }catch(e){ CL.err=(e&&e.status===403)?'rule':'net'; CL.errMsg=(e&&e.status?'HTTP '+e.status:'')+' '+String(e&&e.message||e).slice(0,120); console.error('cleaning load',e); }
-  CL.loaded=true;
+  CL.loaded=true; CL.at=Date.now();
 }
 const clUnit=id=>((CL.cfg&&CL.cfg.units)||[]).find(u=>u.id===id);
 const clUnitName=(id,e)=>{ const u=clUnit(id); if(u) return u.name; const i=(e&&e.units||[]).indexOf(id); return (e&&e.unitNames&&e.unitNames[i])||'?'; };
@@ -2708,7 +2730,7 @@ setConflictHandler((kind,mine,theirs)=>{
   if(typeof render==='function') render();
 });
 // keep in sync while the app is open: pull every 25 s and whenever the tab comes back to the foreground
-setInterval(()=>{ if(ME&&!isCleaner()&&!document.getElementById('modal').classList.contains('open')){ pullAll().then(()=>clLoad()).then(()=>render()); } },25000);
+setInterval(()=>{ if(ME&&!isCleaner()&&!document.hidden&&!document.getElementById('modal').classList.contains('open')){ pullAll().then(()=>(TAB==='clean'||Date.now()-(CL.at||0)>600000)?clLoad():null).then(()=>render()); } },120000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&ME&&isCleaner()){ if(!CLF||!CLF.id) clLoad().then(()=>{ if(!CLF||(!CLF.units.length&&!CLF.id)) render(); }); return; } if(!document.hidden&&ME){ flushQueue(); pullAll().then(()=>{ if(!document.getElementById('modal').classList.contains('open')) render(); }); } });
 window.addEventListener('online',()=>{ flushQueue(); });
 // restore session in this browser tab
