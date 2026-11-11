@@ -101,7 +101,11 @@ img.rc{max-width:100%;max-height:150px;border-radius:10px;margin-top:8px;border:
 #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1c1d2e;color:#fff;padding:10px 18px;border-radius:24px;font-size:13px;font-weight:700;opacity:0;transition:opacity .25s;z-index:999;pointer-events:none;max-width:88%;text-align:center}
 /* quick add + split across sites */
 .qa-row{display:flex;gap:8px;margin:0 0 8px}.qa-row button{flex:1;padding:13px 6px;border-radius:14px;font-weight:900;font-size:15px;border:0;cursor:pointer;font-family:inherit}
-.qa-exp{background:#fdecea;color:#c0392b}.qa-inc{background:#e8f7ee;color:#1e8449}
+.qa-exp{background:#fdecea;color:#c0392b}.qa-inc{background:#e8f7ee;color:#1e8449}.qa-bk{background:#fdf0e3;color:#c0640c}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:8px}.cal-h{text-align:center;font-size:10px;color:var(--muted);font-weight:700}
+.cal-d{text-align:center;padding:8px 0;border-radius:8px;font-size:12px;font-weight:700;background:var(--card2);color:var(--text2);cursor:pointer;border:2px solid transparent}
+.cal-d.on{color:#fff}.cal-d.clash{border-color:#c0392b;box-shadow:0 0 0 1px #fff inset}.cal-d.today{outline:2px solid var(--text);outline-offset:-2px}
+.cal-lg{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:11px;color:var(--text2)}.cal-lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 .site-pick{display:block;width:100%;text-align:left;padding:13px 14px;margin:0 0 8px;border-radius:12px;border:1.5px solid #e3e6f0;background:#f8f9fb;font-weight:800;font-size:15px;cursor:pointer;font-family:inherit;color:var(--text)}
 .site-pick.split{background:var(--bluebg);border-color:var(--blue);color:var(--blue)}
 .site-line{font-size:12.5px;color:var(--text2);margin:-4px 0 10px}.site-line a{color:var(--blue);font-weight:800;cursor:pointer;margin-left:6px}
@@ -771,7 +775,7 @@ function viewHome(){
     h+=`<div class="card" style="text-align:center;color:var(--green);font-weight:700">✅ Everyone is settled up</div>`;
   }
   h=backupNudgeHTML()+plHomeStrip()+h;
-  h+=`<div class="qa-row"><button class="qa-exp" onclick="quickAdd('exp')">＋ Expense</button><button class="qa-inc" onclick="quickAdd('inc')">＋ Income</button></div>`;
+  h+=`<div class="qa-row"><button class="qa-exp" onclick="quickAdd('exp')">＋ Expense</button><button class="qa-inc" onclick="quickAdd('inc')">＋ Income</button><button class="qa-bk" onclick="quickBooking()">＋ Booking</button></div>`+pendingBookingsCardHTML();
   h+=`<button class="cancel-btn" style="margin:0 0 4px;background:var(--bluebg);color:var(--blue);border-color:var(--blue)" onclick="openCsvImport()">⬆️ Import Airbnb CSV</button>`;
   h+=`<div class="sec-hdr">Sites${m?' · '+monthLabel(m):' · all time'} <button class="add-btn" onclick="openAddSite()">+ Add</button></div>`;
   const allBy={}; allP.per.forEach(({site,res})=>allBy[site.id]=res);
@@ -802,7 +806,7 @@ function viewSites(){
   const sites=siteList();
   let h=`<div class="sec-hdr">All Sites <span><button class="add-btn" style="background:var(--bluebg);color:var(--blue)" onclick="openCsvImport()">⬆️ Airbnb CSV</button> <button class="add-btn" onclick="openAddSite()">+ Add</button></span></div>`;
   if(!sites.length) return h+`<div class="empty"><div class="emo">🏗️</div><p>No sites yet.</p></div>`;
-  h=`<div class="qa-row"><button class="qa-exp" onclick="quickAdd('exp')">＋ Expense</button><button class="qa-inc" onclick="quickAdd('inc')">＋ Income</button></div>`+h;
+  h=`<div class="qa-row"><button class="qa-exp" onclick="quickAdd('exp')">＋ Expense</button><button class="qa-inc" onclick="quickAdd('inc')">＋ Income</button><button class="qa-bk" onclick="quickBooking()">＋ Booking</button></div>`+h;
   const all=repOverall('','');
   return h+all.per.map(({site,res})=>siteCard(site,res)).join('');
 }
@@ -949,9 +953,10 @@ function viewSite(){
   let h=`<div class="hero small"><div class="hero-lbl">${esc(s.name)} · ${esc(pl)}</div><div class="hero-val ${cls}">${inr(pr.profit,{plus:true})}</div><div class="hero-sub">${pr.profit<0?'Loss':'Profit'} ${pl==='All time'?'so far':'· '+esc(pl)}${REP_SETUP==='spread'?' · setup spread':REP_SETUP==='out'?' · setup left out':''}</div>
     <div class="hero-row"><div><b>${inr(pr.totalInc)}</b><span>Income</span></div><div><b>${inr(pr.totalExp)}</b><span>Expenses</span></div>${pr===allP?`<div><b>${inr(res.totalSetupExp)}</b><span>Setup paid</span></div>`:`<div><b class="${allP.profit>0?'g':allP.profit<0?'r':''}">${inr(allP.profit,{plus:true})}</b><span>All-time</span></div>`}</div></div>`;
   h+=monthBarHTML(sm==='custom'?'':sm,'siteSetMonth',true,sm==='custom'?`<span class="muted">Custom: ${esc(pl)}</span>`:'');
-  h+=`<div class="tabs">${[['exp','Expenses'],['inc','Income'],['buy','Planner'],['settle','Settle'],['rep','Report'],['setup','Split']].map(([k,l])=>`<div class="tab ${SITE_TAB===k?'on':''}" onclick="SITE_TAB='${k}';render()">${l}</div>`).join('')}</div>`;
+  h+=`<div class="tabs">${[['exp','Expenses'],['inc','Income'],['cal','Bookings'],['buy','Planner'],['settle','Settle'],['rep','Report'],['setup','Split']].map(([k,l])=>`<div class="tab ${SITE_TAB===k?'on':''}" onclick="SITE_TAB='${k}';render()">${l}</div>`).join('')}</div>`;
   if(SITE_TAB==='exp') h+=siteExpensesHTML(s);
   else if(SITE_TAB==='inc') h+=siteIncomeHTML(s);
+  else if(SITE_TAB==='cal') h+=siteCalendarHTML(s);
   else if(SITE_TAB==='settle') h+=siteSettleHTML(s,res);
   else if(SITE_TAB==='rep') h+=siteReportHTML(s,res);
   else if(SITE_TAB==='buy') h+=buyListHTML(s.id);
@@ -1144,6 +1149,170 @@ function quickAdd(kind){
     ${kind==='exp'&&act.length>1?`<button class="site-pick split" onclick="openExpenseForm('${act[0].id}',null,{home:1,split:true,all:true})">🔗 Split one bill across sites</button>`:''}
     ${closed.length?`<details style="margin:4px 0 8px"><summary class="muted" style="cursor:pointer">Closed sites (${closed.length})</summary><div style="margin-top:8px">${closed.map(btn).join('')}</div></details>`:''}
     <button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
+}
+/* ════════════ BOOKINGS — offline bookings, a month calendar per site, month-end reconcile ════════════
+   Offline bookings are stored in the 'purchases' collection with type:'booking' (so no new database rules
+   are needed); the Planner ignores them. A booking is either
+     pending   = nights are blocked, money not yet received (counts NOWHERE in money reports)
+     paid      = an income entry was created for it (incomeId) — that income carries the stay dates
+     cancelled = kept for the record, frees the nights
+   If the linked income is later deleted, the booking shows as pending again.
+   The calendar also shows every income entry that has check-in / check-out dates (Airbnb imports, direct). */
+const bookingList=()=>active('purchases').filter(x=>x.type==='booking');
+const bkNights=(a,b)=>(a&&b)?Math.max(0,Math.round((new Date(b)-new Date(a))/864e5)):0;
+const addDays=(d,n)=>{ const x=new Date(d+'T00:00:00'); x.setDate(x.getDate()+n); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); };
+function bkStatus(b){ if(b.status==='cancelled') return 'cancelled'; if(b.status==='paid'){ const i=b.incomeId&&DB.incomes.find(x=>x.id===b.incomeId&&!x.deleted); return i?'paid':'pending'; } return 'pending'; }
+const bkExpected=b=>Math.round((Number(b.rate)||0)*bkNights(b.checkIn,b.checkOut)*100);   // paise
+const pendingBookings=()=>bookingList().filter(b=>bkStatus(b)==='pending').sort((a,b)=>(a.checkIn||'').localeCompare(b.checkIn||''));
+/* every stay on a site: {from,to,kind:'airbnb'|'direct'|'offline'|'pending',label,open} */
+function siteStays(sid){
+  const out=[];
+  incomesOf(sid).filter(i=>i.checkIn&&i.checkOut&&i.kind!=='capital').forEach(i=>out.push({from:i.checkIn,to:i.checkOut,kind:i.bookingRef?'offline':i.confCode?'airbnb':'direct',label:i.guestName||i.note||i.source||'Booking',open:`openIncomeForm('${sid}','${i.id}')`,id:i.id}));
+  bookingList().filter(b=>b.siteId===sid&&bkStatus(b)==='pending'&&b.checkIn&&b.checkOut).forEach(b=>out.push({from:b.checkIn,to:b.checkOut,kind:'pending',label:b.guest||'Offline booking',open:`openBookingForm('${b.id}')`,id:b.id}));
+  return out;
+}
+function stayClashes(sid,from,to,skipIds){ return siteStays(sid).filter(s=>!(skipIds||[]).includes(s.id)&&s.from<to&&from<s.to); }
+
+function quickBooking(){
+  const act=siteList().filter(x=>x.status!=='Closed'); if(!act.length){toast('Add a site first');return;}
+  if(act.length===1) return openBookingForm(null,act[0].id);
+  openModal(`<div class="modal-title">📅 Add Booking</div><div class="form-label">Which site?</div>${act.map(x=>`<button class="site-pick" onclick="openBookingForm(null,'${x.id}')">🏠 ${esc(x.name)}</button>`).join('')}<button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
+}
+function openBookingForm(id,siteId,pre){
+  const b=id?findLocal('purchases',id):null; pre=pre||{};
+  const sid=b?b.siteId:siteId; const s=siteById(sid); if(!s){toast('Site not found');return;}
+  const st=b?bkStatus(b):'new';
+  const me=partnerList().find(p=>p.name===ME.name)?.id; const ids=(s.partners||[]).map(p=>p.pid);
+  const coll=b?.collector||(ids.includes(me)?me:ids[0]);
+  const ci=b?.checkIn||pre.checkIn||todayStr(), co=b?.checkOut||pre.checkOut||addDays(ci,1);
+  if(st==='paid'){ const inc=DB.incomes.find(x=>x.id===b.incomeId);
+    openModal(`<div class="modal-title">📅 Offline booking · ${esc(s.name)}</div><div class="card">
+      <div class="kv"><span>Guest</span><b>${esc(b.guest||'—')}</b></div><div class="kv"><span>Stay</span><b>${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)} · ${bkNights(b.checkIn,b.checkOut)} nights</b></div>
+      <div class="kv"><span>Received</span><b class="g">${inr(toPaise(inc.amount))}</b></div><div class="kv"><span>By</span><b>${paidByText(inc.receivedBy)} · ${fmtDate(inc.date)}</b></div></div>
+      <div class="muted" style="margin:0 2px 10px">Paid — it is in Income. To change the amount, open the income entry.</div>
+      <button class="submit-btn" onclick="closeModal();openIncomeForm('${sid}','${inc.id}')">Open income entry</button><button class="cancel-btn" onclick="closeModal()">Close</button>`); return; }
+  openModal(`<div class="modal-title">${b?'✏️ Edit':'📅 Add'} Booking · ${esc(s.name)}</div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Check-in</label><input type="date" class="form-input" id="bk_in" value="${ci}" onchange="obkCalc()"></div>
+      <div class="form-group"><label class="form-label">Check-out</label><input type="date" class="form-input" id="bk_out" value="${co}" onchange="obkCalc()"></div></div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Guest name</label><input class="form-input" id="bk_guest" value="${esc(b?.guest||'')}" placeholder="optional"></div>
+      <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="bk_phone" inputmode="tel" value="${esc(b?.phone||'')}" placeholder="optional"></div></div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Rate per night (₹)</label><input type="number" inputmode="decimal" class="form-input" id="bk_rate" value="${b?.rate||''}" placeholder="optional" oninput="obkCalc()"></div>
+      <div class="form-group"><label class="form-label">Money collected by</label><select class="form-select" id="bk_coll">${ids.map(p=>`<option value="${p}" ${p===coll?'selected':''}>${esc(pname(p))}</option>`).join('')}</select></div></div>
+    <div class="form-group"><label class="form-label">Note</label><input class="form-input" id="bk_note" value="${esc(b?.note||'')}" placeholder="optional — e.g. friend of Baljot, Airbnb dates blocked"></div>
+    <div id="bk_info" class="muted" style="margin:-2px 2px 10px"></div>
+    <label class="chk" style="margin:0 0 10px"><input type="checkbox" id="bk_paid" onchange="obkCalc()"> Paid already — add it to Income now</label>
+    <div id="bk_paybox" style="display:none"><div class="form-row"><div class="form-group"><label class="form-label">Amount received (₹)</label><input type="number" inputmode="decimal" class="form-input" id="bk_amt"></div>
+      <div class="form-group"><label class="form-label">Received on</label><input type="date" class="form-input" id="bk_pdate" value="${todayStr()}"></div></div></div>
+    <button class="submit-btn" onclick="saveBooking(${b?`'${b.id}'`:'null'},'${sid}')">Save booking</button>
+    ${b?`<div class="btn-row"><button class="site-btn" onclick="cancelBooking('${b.id}')">Not paid / cancelled</button><button class="site-btn" style="color:var(--red)" onclick="deleteBooking('${b.id}')">Delete</button></div>`:''}
+    <button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
+  if(pre.paid){ $('bk_paid').checked=true; }
+  obkCalc(b?b.id:null,sid);
+}
+let _bkCtx={};
+function obkCalc(id,sid){
+  if(id!==undefined) _bkCtx={id,sid};
+  const a=$('bk_in').value, z=$('bk_out').value, n=bkNights(a,z), r=Number($('bk_rate').value||0), ex=Math.round(r*n*100);
+  const cl=(a&&z&&z>a)?stayClashes(_bkCtx.sid,a,z,[_bkCtx.id]):[];
+  $('bk_info').innerHTML=(z&&a&&z<=a)?'<b class="r">Check-out must be after check-in</b>':`${n} night${n===1?'':'s'}${ex?' · expected '+inr(ex):''}`+(cl.length?`<div class="r" style="font-weight:700;margin-top:4px">⚠️ Clashes with ${cl.map(c=>esc(c.label)+' ('+fmtDate(c.from)+' → '+fmtDate(c.to)+')').join(', ')}</div>`:'');
+  const pd=$('bk_paid').checked; $('bk_paybox').style.display=pd?'':'none';
+  if(pd&&!$('bk_amt').dataset.touched&&ex) $('bk_amt').value=ex/100;
+  $('bk_amt').oninput=()=>{$('bk_amt').dataset.touched=1;};
+}
+function _bkIncome(b,amount,date,old){
+  return {...(old||{id:uid()}),siteId:b.siteId,date,amount,kind:'booking',source:'Offline booking',note:b.guest||b.note||'Offline booking',guestName:b.guest||'',checkIn:b.checkIn,checkOut:b.checkOut,nights:bkNights(b.checkIn,b.checkOut),receivedBy:[{pid:b.collector,amount}],bookingRef:b.id};
+}
+function saveBooking(id,sid){
+  const old=id?findLocal('purchases',id):null;
+  const ci=$('bk_in').value, co=$('bk_out').value; if(!ci||!co){toast('Pick check-in and check-out');return;}
+  if(co<=ci){toast('Check-out must be after check-in');return;}
+  const cl=stayClashes(sid,ci,co,[id]);
+  if(cl.length&&!confirm('These nights are already booked:\n'+cl.map(c=>'• '+c.label+' ('+fmtDate(c.from)+' → '+fmtDate(c.to)+')').join('\n')+'\n\nSave anyway?')) return;
+  const rec={...(old||{id:uid()}),type:'booking',item:'Booking',siteId:sid,checkIn:ci,checkOut:co,nights:bkNights(ci,co),guest:$('bk_guest').value.trim(),phone:$('bk_phone').value.trim(),rate:Number($('bk_rate').value||0),collector:$('bk_coll').value,note:$('bk_note').value.trim(),status:old?.status==='cancelled'?'pending':(old?.status||'pending')};
+  if($('bk_paid').checked){
+    const amount=Number($('bk_amt').value||0), date=$('bk_pdate').value; if(!(amount>0)){toast('Enter the amount received');return;} if(!date){toast('Pick the date received');return;}
+    const inc=saveRecord('incomes',_bkIncome(rec,amount,date),ME.name);
+    rec.status='paid'; rec.incomeId=inc.id; rec.paidOn=date;
+    saveRecord('purchases',rec,ME.name);
+    logAction(ME.name,'Offline booking paid: '+siteById(sid).name+' '+fmtDate(ci)+' → '+fmtDate(co)+' · '+inr(toPaise(amount))+' to '+pname(rec.collector),sid);
+    closeModal(); render(); toast('Booking saved and added to Income'); return;
+  }
+  saveRecord('purchases',rec,ME.name);
+  logAction(ME.name,(old?'Edited':'Added')+' offline booking: '+siteById(sid).name+' '+fmtDate(ci)+' → '+fmtDate(co)+' ('+rec.nights+' nights, payment pending)',sid);
+  closeModal(); render(); toast(old?'Booking updated':'Booking saved · payment pending');
+}
+function cancelBooking(id){
+  const b=findLocal('purchases',id); if(!b) return;
+  if(!confirm('Mark this booking as not paid / cancelled?\n\nIts nights are freed and it leaves the pending list. Nothing is added to Income.')) return;
+  saveRecord('purchases',{...b,status:'cancelled'},ME.name); logAction(ME.name,'Offline booking cancelled / not paid: '+siteById(b.siteId)?.name+' '+fmtDate(b.checkIn),b.siteId);
+  closeModal(); render(); toast('Marked not paid / cancelled');
+}
+function deleteBooking(id){
+  const b=findLocal('purchases',id); if(!b) return;
+  if(!confirm('Delete this booking? (Use “Not paid / cancelled” if you want to keep a record.)')) return;
+  deleteRecord('purchases',id,ME.name); logAction(ME.name,'Deleted offline booking: '+siteById(b.siteId)?.name+' '+fmtDate(b.checkIn),b.siteId);
+  closeModal(); render(); toast('Booking deleted');
+}
+
+/* ---- Home / Reports reminder ---- */
+function pendingBookingsCardHTML(){
+  const p=pendingBookings(); if(!p.length) return '';
+  const ex=p.reduce((a,b)=>a+bkExpected(b),0), noRate=p.filter(b=>!bkExpected(b)).length, n=p.reduce((a,b)=>a+bkNights(b.checkIn,b.checkOut),0);
+  return `<div class="card tap-card" style="border:1.5px solid var(--accentborder);background:var(--accentbg);cursor:pointer" onclick="openReconcile()">
+    <div class="kv" style="border:0"><span><b>📅 ${p.length} offline booking${p.length>1?'s':''} · amount pending</b><div class="muted">${n} nights${ex?' · expected '+inr(ex):''}${noRate?' · '+noRate+' without a rate':''}</div></span><b style="color:var(--accent)">Reconcile ›</b></div></div>`;
+}
+
+/* ---- Month-end reconcile ---- */
+function openReconcile(){
+  const p=pendingBookings();
+  if(!p.length){ openModal(`<div class="modal-title">📅 Reconcile offline bookings</div><div class="empty"><p>Nothing pending — every offline booking is paid or closed.</p></div><button class="cancel-btn" onclick="closeModal()">Close</button>`); return; }
+  const by={}; p.forEach(b=>(by[b.collector]=by[b.collector]||[]).push(b));
+  let h=`<div class="modal-title">📅 Reconcile offline bookings</div><div class="muted" style="margin:-4px 2px 10px">Check each against the bank statement / cash, enter what was actually received, and tap ✓. It then goes into Income with its stay dates.</div>`;
+  Object.entries(by).forEach(([pid,list])=>{
+    const ex=list.reduce((a,b)=>a+bkExpected(b),0), n=list.reduce((a,b)=>a+bkNights(b.checkIn,b.checkOut),0);
+    h+=`<div class="sec-hdr">${esc(pname(pid))} · ${list.length} booking${list.length>1?'s':''} · ${n} nights${ex?' · expected '+inr(ex):''}</div>`;
+    h+=list.map(b=>{ const e=bkExpected(b); return `<div class="card" style="padding:10px 12px">
+      <div style="display:flex;justify-content:space-between;gap:8px"><div><b>${esc(siteById(b.siteId)?.name||'')}</b> · ${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)} · ${bkNights(b.checkIn,b.checkOut)}n<div class="muted">${esc(b.guest||'Guest not named')}${b.rate?' · ₹'+b.rate+'/night':''}${b.note?' · '+esc(b.note):''}</div></div><a class="muted" style="cursor:pointer" onclick="openBookingForm('${b.id}')">Edit</a></div>
+      <div class="form-row" style="margin-top:8px;align-items:flex-end"><div class="form-group" style="margin:0"><label class="form-label">Received ₹</label><input type="number" inputmode="decimal" class="form-input" id="rc_a_${b.id}" value="${e?e/100:''}"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">On</label><input type="date" class="form-input" id="rc_d_${b.id}" value="${b.checkOut<=todayStr()?b.checkOut:todayStr()}"></div></div>
+      <div class="btn-row" style="margin-top:8px"><button class="site-btn pay" onclick="reconcileBooking('${b.id}')">✓ Received</button><button class="site-btn" onclick="cancelBooking('${b.id}')">Not paid</button></div></div>`; }).join('');
+  });
+  h+=`<button class="cancel-btn" onclick="closeModal()">Close</button>`;
+  openModal(h);
+}
+function reconcileBooking(id){
+  const b=findLocal('purchases',id); if(!b) return;
+  const amount=Number($('rc_a_'+id).value||0), date=$('rc_d_'+id).value;
+  if(!(amount>0)){toast('Enter the amount received');return;} if(!date){toast('Pick the date');return;}
+  if(!(siteById(b.siteId)?.partners||[]).some(p=>p.pid===b.collector)){toast(pname(b.collector)+' is not a partner in this site — edit the booking');return;}
+  const inc=saveRecord('incomes',_bkIncome(b,amount,date),ME.name);
+  saveRecord('purchases',{...b,status:'paid',incomeId:inc.id,paidOn:date},ME.name);
+  logAction(ME.name,'Reconciled offline booking: '+siteById(b.siteId).name+' '+fmtDate(b.checkIn)+' → '+fmtDate(b.checkOut)+' · '+inr(toPaise(amount))+' received by '+pname(b.collector),b.siteId);
+  toast('Added to Income'); openReconcile(); render();
+}
+
+/* ---- Site → Bookings tab: month calendar ---- */
+function siteCalendarHTML(s){
+  const sm=sitePeriodMonth(); const m=(sm&&sm!=='custom')?sm:(_repFrom||todayStr()).slice(0,7);
+  const [y,mo]=m.split('-').map(Number); const days=new Date(y,mo,0).getDate(); const first=(new Date(y,mo-1,1).getDay()+6)%7;
+  const stays=siteStays(s.id); const night={};
+  stays.forEach(st=>{ for(let d=st.from; d<st.to; d=addDays(d,1)){ if(d.slice(0,7)!==m) { if(d>m+'-31') break; continue; } (night[d]=night[d]||[]).push(st); } });
+  const col={airbnb:'#ff5a5f',direct:'#1e8449',offline:'#2b6ef0',pending:'#e67e22'};
+  const cnt={airbnb:0,direct:0,offline:0,pending:0}; let booked=0;
+  let g=`<div class="cal">${['M','T','W','T','F','S','S'].map(d=>`<div class="cal-h">${d}</div>`).join('')}${'<div></div>'.repeat(first)}`;
+  for(let d=1; d<=days; d++){ const ds=m+'-'+String(d).padStart(2,'0'); const st=night[ds]||[];
+    if(st.length){ booked++; cnt[st[0].kind]++; }
+    g+=`<div class="cal-d ${st.length?'on':''} ${st.length>1?'clash':''} ${ds===todayStr()?'today':''}" style="${st.length?`background:${col[st[0].kind]}`:''}" ${st.length?`onclick="${st[0].open}"`:`onclick="openBookingForm(null,'${s.id}',{checkIn:'${ds}',checkOut:'${addDays(ds,1)}'})"`} title="${st.map(x=>esc(x.label)).join(', ')}">${d}</div>`; }
+  g+=`</div>`;
+  const lg=`<div class="cal-lg">${[['airbnb','Airbnb'],['direct','Direct'],['offline','Offline · paid'],['pending','Offline · pending']].map(([k,l])=>`<span><i style="background:${col[k]}"></i>${l} ${cnt[k]||0}</span>`).join('')}</div>`;
+  let h=`<div class="sec-hdr">Bookings · ${monthLabel(m)} <button class="add-btn" onclick="openBookingForm(null,'${s.id}')">+ Booking</button></div>`;
+  h+=`<div class="card"><div class="kv" style="border:0;padding-top:0"><span><b>${booked} of ${days} nights booked</b></span><b>${Math.round(booked/days*100)}%</b></div>${g}${lg}${Object.values(night).some(x=>x.length>1)?`<div class="r" style="font-weight:700;margin-top:6px">⚠️ Red-bordered days are booked twice — check them.</div>`:''}<div class="muted" style="margin-top:6px">Tap an empty day to add a booking; tap a booked day to open it.</div></div>`;
+  const inM=stays.filter(st=>st.from<=m+'-31'&&st.to>m+'-01').sort((a,b)=>a.from.localeCompare(b.from));
+  const nm={airbnb:'Airbnb',direct:'Direct',offline:'Offline · paid',pending:'Offline · payment pending'};
+  h+=inM.length?inM.map(st=>`<div class="entry" onclick="${st.open}"><div class="entry-l"><div class="entry-t">${esc(st.label)}</div><div class="entry-s"><b style="color:${col[st.kind]}">${nm[st.kind]}</b> · ${fmtDate(st.from)} → ${fmtDate(st.to)} · ${bkNights(st.from,st.to)} nights</div></div></div>`).join(''):`<div class="empty"><p>No stays in ${monthLabel(m)}.</p></div>`;
+  const pend=pendingBookings().filter(b=>b.siteId===s.id);
+  if(pend.length) h+=`<button class="cancel-btn" style="margin-top:8px;background:var(--accentbg);color:var(--accent);border-color:var(--accentborder)" onclick="openReconcile()">Reconcile ${pend.length} pending offline booking${pend.length>1?'s':''}</button>`;
+  return h;
 }
 function toggleOverride(){ $('ov_wrap').style.display=$('f_ov').checked?'block':'none'; if($('f_ov').checked) updSplitTotal('ovs'); }
 let _receipt='';
@@ -1640,7 +1809,7 @@ function viewReports(){
   const tabs=[['month','Monthly P&L'],['site','Site-wise'],['partner','Partner-wise']];
   let h=`<div class="tabs">${tabs.map(([k,l])=>`<div class="tab ${REP===k?'on':''}" onclick="REP='${k}';render()">${l}</div>`).join('')}</div>`;
   if(!siteList().length) return h+`<div class="empty"><div class="emo">📊</div><p>Add a site and some entries to see reports.</p></div>`;
-  h+=`<button class="submit-btn" style="margin:0 0 10px" onclick="openSendReport()">📤 Send / Export Report</button>`+setupToggleHTML();
+  h+=`<button class="submit-btn" style="margin:0 0 10px" onclick="openSendReport()">📤 Send / Export Report</button>`+pendingBookingsCardHTML()+setupToggleHTML();
   if(REP==='month') h+=repMonthly(); else if(REP==='site') h+=repSites(); else h+=repPartner();
   return h;
 }
@@ -2319,7 +2488,7 @@ async function doRestore(mode){
    • Tasks can be assigned to a partner or everyone, with an optional time = reminder.
    • The optional "cost & add to expenses" form for a bought item is still there inside the item. */
 let PL_DAY='', PL_TYPE='all', BUY_SITE='all', PL_MINE=false;
-const purchaseList=()=>active('purchases');
+const purchaseList=()=>active('purchases').filter(x=>x.type!=='booking');   // offline bookings live here too (type 'booking')
 const plType=x=>x.type==='task'?'task':'buy';
 const plDone=x=>x.status==='purchased'||x.status==='done';
 const plDoneOn=x=>x.purchasedOn||x.doneOn||'';
