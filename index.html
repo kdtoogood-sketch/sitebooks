@@ -70,6 +70,8 @@ body{background:#f0f2f8;color:#1c1d2e;max-width:480px;margin:0 auto;display:flex
 .entry{display:flex;justify-content:space-between;gap:10px;background:var(--card);border:1.5px solid var(--border);border-radius:13px;padding:11px 12px;margin-bottom:8px;align-items:flex-start;cursor:pointer}
 .entry-t{font-size:13px;font-weight:700}.entry-s{font-size:11px;color:var(--muted);margin-top:2px}.entry-a{font-size:14px;font-weight:900;white-space:nowrap}
 .tagsetup{color:var(--purple)}.tagov{color:var(--accent)}
+.mbar{flex-wrap:wrap}.mbar input[type=month]{flex:1;min-width:120px;max-width:180px}.mbar .mini-btn{padding:8px 12px;font-size:11px;background:var(--card2);color:var(--text2);border:1.5px solid var(--border)}.mbar .mini-btn.on{background:var(--accentbg);color:var(--accent);border-color:var(--accentborder)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}.chips label{display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:999px;font-size:12px;background:var(--card);cursor:pointer}
 .mini-btn{border:none;border-radius:999px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0}.mini-btn.edit{background:var(--bluebg);color:var(--blue)}.mini-btn.del{background:var(--redbg);color:var(--red)}
 /* tables */
 .tbl-wrap{overflow-x:auto;background:var(--card);border:1.5px solid var(--border);border-radius:14px;margin-bottom:11px}
@@ -753,15 +755,15 @@ function overallForRange(from,to){
 function viewHome(){
   const sites=siteList();
   if(!sites.length) return `<div class="empty"><div class="emo">🏠</div><p>No sites yet.<br>Add your first rented property to start tracking.</p><button class="submit-btn" style="max-width:220px;margin:14px auto 0" onclick="openAddSite()">+ Add Site</button></div>`;
-  const m=monthStr(); const first=m+'-01', last=m+'-31';
-  const all=overallForRange('',''), mon=overallForRange(first,last);
+  const m=HOME_M; const first=m?m+'-01':'', last=m?m+'-31':'';
+  const all=overallForRange('',''), mon=m?overallForRange(first,last):all;
   const cls=v=>v>0?'g':v<0?'r':'';
   let h=`<div class="hero">
-    <div class="hero-lbl">${monthLabel(m)} · all sites</div>
+    <div class="hero-lbl">${m?monthLabel(m):'All time'} · all sites</div>
     <div class="hero-val ${cls(mon.profit)}">${inr(mon.profit,{plus:true})}</div>
-    <div class="hero-sub">${mon.profit>=0?'Profit':'Loss'} this month</div>
+    <div class="hero-sub">${mon.profit>=0?'Profit':'Loss'} ${m?(m===monthStr()?'this month':'in '+monthLabel(m)):'so far'}</div>
     <div class="hero-row"><div><b>${inr(mon.totalInc)}</b><span>Income</span></div><div><b>${inr(mon.totalExp)}</b><span>Expenses</span></div><div><b class="${cls(all.profit)}">${inr(all.profit,{plus:true})}</b><span>All-time</span></div></div>
-  </div>`;
+  </div>`+monthBarHTML(m,'homeSetMonth',true);
   // who owes whom overall
   if(all.transfers.length){
     h+=`<div class="sec-hdr">Pending settlement · all sites</div><div class="card">`+all.transfers.map(t=>`<div class="tr-row"><span><b>${esc(pname(t.from))}</b> pays <b>${esc(pname(t.to))}</b></span><span class="amt">${inr(t.amount)}</span></div><div style="text-align:right;margin:-4px 0 8px"><button class="mini-btn edit" onclick="openGlobalSettle('${t.from}','${t.to}')">🤝 Record payment</button></div>`).join('')+`</div>`;
@@ -771,15 +773,27 @@ function viewHome(){
   h=backupNudgeHTML()+plHomeStrip()+h;
   h+=`<div class="qa-row"><button class="qa-exp" onclick="quickAdd('exp')">＋ Expense</button><button class="qa-inc" onclick="quickAdd('inc')">＋ Income</button></div>`;
   h+=`<button class="cancel-btn" style="margin:0 0 4px;background:var(--bluebg);color:var(--blue);border-color:var(--blue)" onclick="openCsvImport()">⬆️ Import Airbnb CSV</button>`;
-  h+=`<div class="sec-hdr">Sites <button class="add-btn" onclick="openAddSite()">+ Add</button></div>`;
-  h+=all.per.map(({site,res})=>siteCard(site,res)).join('');
+  h+=`<div class="sec-hdr">Sites${m?' · '+monthLabel(m):' · all time'} <button class="add-btn" onclick="openAddSite()">+ Add</button></div>`;
+  const allBy={}; all.per.forEach(({site,res})=>allBy[site.id]=res);
+  h+=mon.per.map(({site,res})=>siteCard(site,res,{month:m,allTime:m?allBy[site.id]:null})).join('');
   return h;
 }
-function siteCard(site,res){
+/* Home month chooser: '' = all time. Tapping a site opens it on the same month. */
+let HOME_M=monthStr();
+function homeSetMonth(v){ HOME_M=v||''; render(); }
+function shiftMonth(m,d){ const [y,mo]=(m||monthStr()).split('-').map(Number); const dt=new Date(y,mo-1+d,1); return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'); }
+/* ‹ [month] › [All time] bar. cur '' = all time; setter is a global function name taking 'YYYY-MM' or ''. */
+function monthBarHTML(cur,setter,allowAll,extra){
+  return `<div class="filters mbar"><button class="icon-btn" aria-label="Previous month" onclick="${setter}(shiftMonth('${cur}',-1))">‹</button><input type="month" class="form-input" value="${cur||''}" onchange="${setter}(this.value)"><button class="icon-btn" aria-label="Next month" onclick="${setter}(shiftMonth('${cur}',1))">›</button>${allowAll?`<button class="mini-btn ${cur?'':'on'}" onclick="${setter}('')">All time</button>`:''}${extra||''}</div>`;
+}
+function openSiteMonth(id,m,tab){ _repFrom=m?m+'-01':''; _repTo=m?m+'-31':''; openSite(id,tab); }
+function siteCard(site,res,opt){
   const cls=res.profit>0?'g':res.profit<0?'r':'';
-  return `<div class="site-card" onclick="openSite('${site.id}')">
+  const at=opt&&opt.allTime;
+  return `<div class="site-card" onclick="${opt?`openSiteMonth('${site.id}','${opt.month}')`:`openSite('${site.id}')`}">
     <div class="site-top"><div><div class="site-name">${esc(site.name)}</div><div class="site-loc">📍 ${esc(site.address||'—')}</div></div><div class="site-badge ${site.status==='Closed'?'closed':''}">${esc(site.status||'Active')}</div></div>
     <div class="site-money3"><div><div class="v r">${inr(res.totalExp)}</div><div class="l">Expenses</div></div><div><div class="v g">${inr(res.totalInc)}</div><div class="l">Income</div></div><div><div class="v ${cls}">${inr(res.profit,{plus:true})}</div><div class="l">${res.profit<0?'Loss':'Profit'}</div></div></div>
+    ${at?`<div class="muted" style="margin-top:6px;text-align:right">All-time ${at.profit<0?'loss':'profit'} <b class="${at.profit>0?'g':at.profit<0?'r':''}">${inr(at.profit,{plus:true})}</b></div>`:''}
   </div>`;
 }
 
@@ -914,12 +928,25 @@ function saveSiteForm(id){
 }
 
 /* ════════════ SITE PAGE ════════════ */
+/* The site page period lives in _repFrom/_repTo (shared with the Report tab's dates).
+   'YYYY-MM' when it is exactly one month, '' for all time, 'custom' for any other range. */
+function sitePeriodMonth(){
+  if(!_repFrom&&!_repTo) return '';
+  const m=(_repFrom||'').slice(0,7);
+  return (/^\d{4}-\d{2}-01$/.test(_repFrom)&&_repTo===m+'-31')?m:'custom';
+}
+function sitePeriodLabel(){ const m=sitePeriodMonth(); return m===''?'All time':m==='custom'?(_repFrom?fmtDate(_repFrom):'Start')+' → '+(_repTo?fmtDate(_repTo):'Today'):monthLabel(m); }
+function siteSetMonth(v){ _repFrom=v?v+'-01':''; _repTo=v?v+'-31':''; render(); }
+function _inSitePeriod(d){ return (!_repFrom||d>=_repFrom)&&(!_repTo||d<=_repTo); }
 function viewSite(){
   const s=siteById(CUR_SITE); if(!s) return `<div class="empty"><p>Site not found.</p></div>`;
   const res=computeSite(s,expensesOf(s.id),incomesOf(s.id),settlementsOf(s.id));
-  const cls=res.profit>0?'g':res.profit<0?'r':'';
-  let h=`<div class="hero small"><div class="hero-lbl">${esc(s.name)}</div><div class="hero-val ${cls}">${inr(res.profit,{plus:true})}</div><div class="hero-sub">${res.profit<0?'Loss':'Profit'} so far</div>
-    <div class="hero-row"><div><b>${inr(res.totalInc)}</b><span>Income</span></div><div><b>${inr(res.totalExp)}</b><span>Expenses</span></div><div><b>${inr(res.totalSetupExp)}</b><span>Setup cost</span></div></div></div>`;
+  const sm=sitePeriodMonth(), pl=sitePeriodLabel();
+  const pr=(_repFrom||_repTo)?computeSite(s,expensesOf(s.id),incomesOf(s.id),settlementsOf(s.id),{from:_repFrom,to:_repTo}):res;
+  const cls=pr.profit>0?'g':pr.profit<0?'r':'';
+  let h=`<div class="hero small"><div class="hero-lbl">${esc(s.name)} · ${esc(pl)}</div><div class="hero-val ${cls}">${inr(pr.profit,{plus:true})}</div><div class="hero-sub">${pr.profit<0?'Loss':'Profit'} ${pl==='All time'?'so far':'· '+esc(pl)}</div>
+    <div class="hero-row"><div><b>${inr(pr.totalInc)}</b><span>Income</span></div><div><b>${inr(pr.totalExp)}</b><span>Expenses</span></div>${pr===res?`<div><b>${inr(res.totalSetupExp)}</b><span>Setup cost</span></div>`:`<div><b class="${res.profit>0?'g':res.profit<0?'r':''}">${inr(res.profit,{plus:true})}</b><span>All-time</span></div>`}</div></div>`;
+  h+=monthBarHTML(sm==='custom'?'':sm,'siteSetMonth',true,sm==='custom'?`<span class="muted">Custom: ${esc(pl)}</span>`:'');
   h+=`<div class="tabs">${[['exp','Expenses'],['inc','Income'],['buy','Planner'],['settle','Settle'],['rep','Report'],['setup','Split']].map(([k,l])=>`<div class="tab ${SITE_TAB===k?'on':''}" onclick="SITE_TAB='${k}';render()">${l}</div>`).join('')}</div>`;
   if(SITE_TAB==='exp') h+=siteExpensesHTML(s);
   else if(SITE_TAB==='inc') h+=siteIncomeHTML(s);
@@ -932,18 +959,22 @@ function viewSite(){
 function paidByText(lines){ return (lines||[]).map(l=>`${esc(pname(l.pid))} ${inr(toPaise(l.amount))}`).join(' + '); }
 
 function siteExpensesHTML(s){
-  const list=expensesOf(s.id).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
-  let h=`<div class="sec-hdr">Expenses (${list.length}) <button class="add-btn" onclick="openExpenseForm('${s.id}')">+ Expense</button></div>`;
-  if(!list.length) return h+`<div class="empty"><div class="emo">💸</div><p>No expenses yet.</p></div>`;
+  const list=expensesOf(s.id).filter(e=>_inSitePeriod(e.date)).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
+  const pl=sitePeriodLabel(), tot=list.reduce((a,e)=>a+toPaise(e.amount),0);
+  let h=`<div class="sec-hdr">Expenses (${list.length})${pl!=='All time'?' · '+esc(pl):''} <button class="add-btn" onclick="openExpenseForm('${s.id}')">+ Expense</button></div>`;
+  if(!list.length) return h+`<div class="empty"><div class="emo">💸</div><p>${pl!=='All time'?'No expenses in '+esc(pl)+'.':'No expenses yet.'}</p></div>`;
+  h+=`<div class="muted" style="margin:-4px 2px 8px;text-align:right">Total <b class="r">${inr(tot)}</b></div>`;
   return h+list.map(e=>`<div class="entry" onclick="openExpenseForm('${s.id}','${e.id}')">
     <div class="entry-l"><div class="entry-t">${esc(e.note||e.category||'Expense')}</div>
       <div class="entry-s">${e.category?esc(e.category)+' · ':''}${e.vendor?esc(e.vendor)+' · ':''}${fmtDate(e.date)}${e.kind==='setup'?' · <b class="tagsetup">SETUP</b>':''}${e.split&&e.split.length?' · <b class="tagov">CUSTOM SPLIT</b>':''}${(()=>{const g=groupInfo(e);return g?` · <b class="tagsplit">🔗 ${inr(g.total)} ÷ ${g.n} SITES</b>`:'';})()}</div>
       <div class="entry-s">Paid by ${paidByText(e.paidBy)}</div></div><div class="entry-a r">${inr(toPaise(e.amount))}</div></div>`).join('');
 }
 function siteIncomeHTML(s){
-  const list=incomesOf(s.id).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
-  let h=`<div class="sec-hdr">Money received (${list.length}) <span><button class="add-btn" style="background:var(--bluebg);color:var(--blue)" onclick="openCsvImport()">⬆️ CSV</button> <button class="add-btn" onclick="openIncomeForm('${s.id}')">+ Add</button></span></div>`;
-  if(!list.length) return h+`<div class="empty"><div class="emo">💰</div><p>No income yet.</p></div>`;
+  const list=incomesOf(s.id).filter(i=>_inSitePeriod(i.date)).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
+  const pl=sitePeriodLabel(), tot=list.filter(i=>i.kind!=='capital').reduce((a,i)=>a+toPaise(i.amount),0);
+  let h=`<div class="sec-hdr">Money received (${list.length})${pl!=='All time'?' · '+esc(pl):''} <span><button class="add-btn" style="background:var(--bluebg);color:var(--blue)" onclick="openCsvImport()">⬆️ CSV</button> <button class="add-btn" onclick="openIncomeForm('${s.id}')">+ Add</button></span></div>`;
+  if(!list.length) return h+`<div class="empty"><div class="emo">💰</div><p>${pl!=='All time'?'No income in '+esc(pl)+'.':'No income yet.'}</p></div>`;
+  h+=`<div class="muted" style="margin:-4px 2px 8px;text-align:right">Total <b class="g">${inr(tot)}</b>${list.some(i=>i.kind==='capital')?' (excl. partner capital)':''}</div>`;
   const kindLabel={booking:'Booking',capital:'Partner capital',refund:'Refund'};
   return h+list.map(i=>`<div class="entry" onclick="openIncomeForm('${s.id}','${i.id}')">
     <div class="entry-l"><div class="entry-t">${esc(i.note||i.source||kindLabel[i.kind]||'Income')}</div>
@@ -1267,7 +1298,7 @@ function gSetSave(){
 function siteSettleHTML(s,res){
   const nets={}; Object.values(res.partners).forEach(p=>nets[p.pid]=p.net);
   const tr=settleUp(nets);
-  let h=`<div class="sec-hdr">Who owes whom</div><div class="card">`;
+  let h=`<div class="sec-hdr">Who owes whom${(_repFrom||_repTo)?' · all time':''}</div>${(_repFrom||_repTo)?`<div class="muted" style="margin:-4px 2px 8px">Balances always count every entry, whatever month is picked above.</div>`:''}<div class="card">`;
   h+=Object.values(res.partners).map(p=>`<div class="tr-row"><span><b>${esc(pname(p.pid))}</b><div class="muted">${p.net>0?'is owed':p.net<0?'owes':'settled'}</div></span><span class="amt ${p.net>0?'g':p.net<0?'r':''}">${p.net===0?'₹0':inr(Math.abs(p.net))}</span></div>`).join('');
   h+=`</div>`;
   if(tr.length){
@@ -1369,10 +1400,26 @@ function setupToggleHTML(){
     <input type="checkbox" ${REP_NO_SETUP?'checked':''} onchange="REP_NO_SETUP=this.checked;render()"> Exclude one-time setup costs${REP_NO_SETUP?' <span style="color:var(--accent);margin-left:auto">ON</span>':''}</label>`;
 }
 
-let SR={scope:'all',site:'',period:'month',month:monthStr(),year:new Date().getFullYear(),from:'',to:'',noSetup:false,ledger:true};
+let SR={scope:'all',site:'',sel:[],period:'month',month:monthStr(),year:new Date().getFullYear(),from:'',to:'',noSetup:false,ledger:true,f:{exp:true,inc:true,set:true,cat:'',pid:''}};
+/* Entry filter for ledgers (Excel 'Ledger' sheet and the PDF ledger). kind: exp | inc | set */
+function ledgerKeep(kind,e,f){
+  if(!f) return true;
+  if(!f[kind]) return false;
+  if(f.cat&&kind==='exp'&&(e.category||'')!==f.cat) return false;
+  if(f.pid){
+    if(kind==='exp') return (e.paidBy||[]).some(l=>l.pid===f.pid);
+    if(kind==='inc') return (e.receivedBy||[]).some(l=>l.pid===f.pid)||(e.contributedBy||[]).some(l=>l.pid===f.pid);
+    return e.from===f.pid||e.to===f.pid;
+  }
+  return true;
+}
+function ledgerFilterOn(f){ return !!f&&(!f.exp||!f.inc||!f.set||!!f.cat||!!f.pid); }
+function ledgerFilterLabel(f){ if(!ledgerFilterOn(f)) return 'All entries'; const t=[f.exp&&'expenses',f.inc&&'income',f.set&&'settlements'].filter(Boolean).join(', ')||'nothing'; return 'Only '+t+(f.cat?' · category '+f.cat:'')+(f.pid?' · '+pname(f.pid)+"'s entries":''); }
 function openSendReport(pre){
   SR={...SR,noSetup:REP_NO_SETUP,...(pre||{})};
   if(!SR.site||!siteById(SR.site)) SR.site=(siteList()[0]||{}).id||'';
+  if(!SR.sel||!SR.sel.length) SR.sel=siteList().map(s=>s.id);
+  SR.f={exp:true,inc:true,set:true,cat:'',pid:'',...(SR.f||{})};
   _renderSendReport();
 }
 function _srKeep(){
@@ -1384,6 +1431,8 @@ function _srKeep(){
   if(v('sr_to')!==null) SR.to=v('sr_to');
   if($('sr_ns')) SR.noSetup=$('sr_ns').checked;
   if($('sr_lg')) SR.ledger=$('sr_lg').checked;
+  if(SR.scope==='pick'&&$('sr_pickbox')) SR.sel=siteList().filter(s=>$('sr_sel_'+s.id)&&$('sr_sel_'+s.id).checked).map(s=>s.id);
+  if($('sr_fexp')) SR.f={exp:$('sr_fexp').checked,inc:$('sr_finc').checked,set:$('sr_fset').checked,cat:$('sr_fcat').value,pid:$('sr_fpid').value};
 }
 function srRange(){
   if(SR.period==='month') return {from:SR.month+'-01',to:SR.month+'-31',label:monthLabel(SR.month)};
@@ -1391,7 +1440,7 @@ function srRange(){
   if(SR.period==='range') return {from:SR.from,to:SR.to,label:(SR.from?fmtDate(SR.from):'Start')+' to '+(SR.to?fmtDate(SR.to):'Today')};
   return {from:'',to:'',label:'All time'};
 }
-function srSites(){ return SR.scope==='all'?siteList():[siteById(SR.site)].filter(Boolean); }
+function srSites(){ return SR.scope==='all'?siteList():SR.scope==='pick'?siteList().filter(s=>(SR.sel||[]).includes(s.id)):[siteById(SR.site)].filter(Boolean); }
 function _srExpOf(sid){ return SR.noSetup?expensesOf(sid).filter(e=>e.kind!=='setup'):expensesOf(sid); }
 function _renderSendReport(){
   const sites=siteList();
@@ -1404,8 +1453,9 @@ function _renderSendReport(){
   const re=()=>`_srKeep();_renderSendReport()`;
   openModal(`<div class="modal-title">📤 Send Report</div>
     <div class="form-label">Which sites</div>
-    ${tabs([['all','🏘️ All sites'],['site','🏠 One site']],SR.scope,'scope')}
+    ${tabs([['all','🏘️ All sites'],['site','🏠 One site'],['pick','☑️ Choose sites']],SR.scope,'scope')}
     ${SR.scope==='site'?`<div class="form-group"><select class="form-select" id="sr_site" onchange="${re()}">${sites.map(s=>`<option value="${s.id}" ${SR.site===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></div>`:''}
+    ${SR.scope==='pick'?`<div class="chips" id="sr_pickbox">${sites.map(s=>`<label><input type="checkbox" id="sr_sel_${s.id}" ${(SR.sel||[]).includes(s.id)?'checked':''} onchange="${re()}"> ${esc(s.name)}</label>`).join('')}</div>`:''}
     <div class="form-label">Period</div>
     ${tabs([['month','Month'],['year','Year'],['range','Date range'],['all','All time']],SR.period,'period')}
     ${SR.period==='month'?`<div class="form-group"><input type="month" class="form-input" id="sr_month" value="${SR.month}" onchange="${re()}"></div>`:''}
@@ -1413,41 +1463,54 @@ function _renderSendReport(){
     ${SR.period==='range'?`<div class="form-row"><div class="form-group"><label class="form-label">From</label><input type="date" class="form-input" id="sr_from" value="${SR.from}" onchange="${re()}"></div><div class="form-group"><label class="form-label">To</label><input type="date" class="form-input" id="sr_to" value="${SR.to}" onchange="${re()}"></div></div>`:''}
     <label class="chk" style="margin:4px 0 8px"><input type="checkbox" id="sr_ns" ${SR.noSetup?'checked':''} onchange="${re()}"> Exclude one-time setup costs</label>
     <label class="chk" style="margin:0 0 12px"><input type="checkbox" id="sr_lg" ${SR.ledger?'checked':''}> Include full ledger (every entry) in PDF</label>
+    <div class="form-label">Entries in the ledger</div>
+    <div class="chips"><label><input type="checkbox" id="sr_fexp" ${SR.f.exp?'checked':''} onchange="${re()}"> Expenses</label><label><input type="checkbox" id="sr_finc" ${SR.f.inc?'checked':''} onchange="${re()}"> Income</label><label><input type="checkbox" id="sr_fset" ${SR.f.set?'checked':''} onchange="${re()}"> Partner payments</label></div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Expense category</label><select class="form-select" id="sr_fcat" onchange="${re()}"><option value="">All categories</option>${[...new Set(DB.expenses.filter(e=>!e.deleted&&e.category).map(e=>e.category))].sort().map(c=>`<option ${SR.f.cat===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Paid / received by</label><select class="form-select" id="sr_fpid" onchange="${re()}"><option value="">Anyone</option>${partnerList().map(p=>`<option value="${p.id}" ${SR.f.pid===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div></div>
     <div class="card" style="background:var(--card2)">
-      <div class="muted" style="margin-bottom:4px">${esc(SR.scope==='all'?ss.length+' sites':(ss[0]?ss[0].name:''))} · ${esc(rg.label)}${SR.noSetup?' · setup excluded':''}</div>
+      <div class="muted" style="margin-bottom:4px">${esc(SR.scope==='site'?(ss[0]?ss[0].name:''):SR.scope==='pick'?(ss.length?ss.map(x=>x.name).join(', '):'No site picked'):ss.length+' sites')} · ${esc(rg.label)}${SR.noSetup?' · setup excluded':''}</div>
       <div class="kv"><span>Income</span><b class="g">${inr(o.totalInc)}</b></div>
       <div class="kv"><span>Expenses</span><b class="r">${inr(o.totalExp)}</b></div>
       <div class="kv total"><span>${o.profit<0?'Loss':'Profit'}</span><b class="${o.profit>=0?'g':'r'}">${inr(o.profit,{plus:true})}</b></div>
       ${(()=>{const b=bookingBreakdown(ss.map(x=>x.id),rg.from,rg.to); return b.withBk?`<div class="muted" style="margin-top:6px">Bookings: guest paid ${inr(b.gross)} · Airbnb fees −${inr(b.fee)} · TDS −${inr(b.tds)} · net ${inr(b.net)}</div>`:'';})()}
+      ${ledgerFilterOn(SR.f)?(()=>{const n=srLedgerCount(ss,rg); return `<div class="muted" style="margin-top:6px">Ledger: ${esc(ledgerFilterLabel(SR.f))} — ${n.n} entr${n.n===1?'y':'ies'}${n.exp?', expenses '+inr(n.exp):''}${n.inc?', income '+inr(n.inc):''}. Totals above stay the full P&amp;L.</div>`;})():''}
     </div>
     <div class="btn-row"><button class="site-btn share" onclick="sendReportPDF()">📄 Share PDF</button><button class="site-btn pay" onclick="sendReportXLSX()">📊 Excel</button></div>
     <button class="cancel-btn" onclick="closeModal()">Close</button>`);
 }
+function srLedgerCount(ss,rg){
+  const inR=d=>(!rg.from||d>=rg.from)&&(!rg.to||d<=rg.to); let n=0,exp=0,inc=0;
+  ss.forEach(s=>{ _srExpOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('exp',e,SR.f)).forEach(e=>{n++;exp+=toPaise(e.amount);});
+    incomesOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('inc',e,SR.f)).forEach(e=>{n++;if(e.kind!=='capital')inc+=toPaise(e.amount);});
+    settlementsOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('set',e,SR.f)).forEach(()=>n++); });
+  return {n,exp,inc};
+}
 function _srFileBase(){
   const rg=srRange(); const ss=srSites();
-  const scope=SR.scope==='all'?'All_Sites':(ss[0]?ss[0].name:'Site');
+  const scope=SR.scope==='all'?'All_Sites':SR.scope==='pick'?(ss.length===siteList().length?'All_Sites':ss.map(x=>x.name).join('_')):(ss[0]?ss[0].name:'Site');
   return ('UrbanHaven_'+scope+'_'+rg.label).replace(/[^a-z0-9]+/gi,'_').replace(/_+$/,'');
 }
 async function sendReportPDF(){
   _srKeep(); const ss=srSites(); if(!ss.length){toast('Pick a site');return;}
   const rg=srRange();
   const title=(SR.scope==='all'?'Profit & Loss Report':'Site Report')+' - '+rg.label;
-  const doc=makePDF(ss,title,rg.from,rg.to,{noSetup:SR.noSetup,ledger:SR.ledger});
+  const doc=makePDF(ss,title,rg.from,rg.to,{noSetup:SR.noSetup,ledger:SR.ledger,f:ledgerFilterOn(SR.f)?SR.f:null});
   if(doc){ await shareOrSave(doc,_srFileBase()+'.pdf'); logAction(ME.name,'Shared report: '+(SR.scope==='all'?'all sites':ss[0].name)+' · '+rg.label); }
 }
 function sendReportXLSX(){
   _srKeep(); const ss=srSites(); if(!ss.length){toast('Pick a site');return;}
   const rg=srRange();
-  exportReportXLSX(ss,rg.from,rg.to,SR.noSetup,rg.label,_srFileBase()+'.xlsx');
+  exportReportXLSX(ss,rg.from,rg.to,SR.noSetup,rg.label,_srFileBase()+'.xlsx',{f:ledgerFilterOn(SR.f)?SR.f:null});
 }
 /* Excel export with Urban Haven branding; setup costs optionally excluded from P&L figures.
    Partner cash columns (paid out, collected, net) always use ALL expenses — that's real money owed. */
-function exportReportXLSX(sites,from,to,noSetup,label,fname){
+function exportReportXLSX(sites,from,to,noSetup,label,fname,xo){
+  xo=xo||{}; const F=xo.f||null;
   if(!window.XLSX){ alert('Excel library did not load. Check your internet connection and try again.'); return; }
   const exOf=sid=>noSetup?expensesOf(sid).filter(e=>e.kind!=='setup'):expensesOf(sid);
   const inR=d=>(!from||d>=from)&&(!to||d<=to);
   const wb=XLSX.utils.book_new();
-  const head=[[BRAND],['Profit & Loss Report'],['Period',label||'All time'],['Sites',sites.length>1?'All sites ('+sites.length+')':sites[0].name],['One-time setup costs',noSetup?'Excluded':'Included'],['Generated',fmtDate(todayStr())+' by '+ME.name],[]];
+  const head=[[BRAND],['Profit & Loss Report'],['Period',label||'All time'],['Sites',sites.length>1?'All sites ('+sites.length+')':sites[0].name],['One-time setup costs',noSetup?'Excluded':'Included'],...(F?[['Ledger filter',ledgerFilterLabel(F)]]:[]),['Generated',fmtDate(todayStr())+' by '+ME.name],[]];
   const _b=bookingBreakdown(sites.map(x=>x.id),from,to);
   if(_b.withBk) head.splice(head.length-1,0,['Bookings: guest paid',_b.gross/100],['Airbnb / platform fees',_b.fee/100],['TDS deducted',_b.tds/100],['Net booking income in hand',_b.net/100]);
   const summary=head.concat([['Site','Income (net in hand)','Expenses','Setup cost','Profit / Loss']]);
@@ -1456,15 +1519,24 @@ function exportReportXLSX(sites,from,to,noSetup,label,fname){
     summary.push([s.name,r.totalInc/100,r.totalExp/100,noSetup?'excluded ('+full.totalSetupExp/100+')':r.totalSetupExp/100,r.profit/100]); ti+=r.totalInc;te+=r.totalExp;ts+=r.totalSetupExp; });
   if(sites.length>1) summary.push(['TOTAL',ti/100,te/100,noSetup?'excluded':ts/100,(ti-te)/100]);
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(summary),'Summary');
-  const ledger=[[BRAND+' — Ledger · '+(label||'All time')],[],['Site','Date','Type','Category / Source','Vendor','Note','Amount','Paid / Received by','Custom split']];
+  const PF=F&&F.pid?F.pid:'';
+  const ledger=[[BRAND+' — Ledger · '+(label||'All time')+(F?' · '+ledgerFilterLabel(F):'')],[],['Site','Date','Month','Type','Category / Source','Vendor','Note','Amount','Paid / Received by','Custom split',...(PF?[pname(PF)+"'s part"]:[])]];
   const rows=[];
   sites.forEach(s=>{
-    exOf(s.id).filter(e=>inR(e.date)).forEach(e=>rows.push([s.name,e.date,e.kind==='setup'?'Setup expense':'Expense',e.category||'',e.vendor||'',e.note||'',e.amount,(e.paidBy||[]).map(l=>pname(l.pid)+' '+l.amount).join(' + '),e.split&&e.split.length?e.split.map(x=>pname(x.pid)+' '+x.pct+'%').join(', '):'']));
-    incomesOf(s.id).filter(e=>inR(e.date)).forEach(e=>rows.push([s.name,e.date,e.kind==='capital'?'Capital':e.kind==='refund'?'Refund':'Income',e.source||'','',e.note||'',e.amount,(e.receivedBy||[]).map(l=>pname(l.pid)+' '+l.amount).join(' + '),'']));
-    settlementsOf(s.id).filter(e=>inR(e.date)).forEach(e=>rows.push([s.name,e.date,'Settlement','','',e.note||'',e.amount,pname(e.from)+' → '+pname(e.to),'']));
+    exOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('exp',e,F)).forEach(e=>rows.push([s.name,e.date,e.date.slice(0,7),e.kind==='setup'?'Setup expense':'Expense',e.category||'',e.vendor||'',e.note||'',e.amount,(e.paidBy||[]).map(l=>pname(l.pid)+' '+l.amount).join(' + '),e.split&&e.split.length?e.split.map(x=>pname(x.pid)+' '+x.pct+'%').join(', '):'',...(PF?[(sumLines(e.paidBy)[PF]||0)/100]:[])]));
+    incomesOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('inc',e,F)).forEach(e=>rows.push([s.name,e.date,e.date.slice(0,7),e.kind==='capital'?'Capital':e.kind==='refund'?'Refund':'Income',e.source||'','',e.note||'',e.amount,(e.receivedBy||[]).map(l=>pname(l.pid)+' '+l.amount).join(' + '),'',...(PF?[(sumLines(e.receivedBy)[PF]||0)/100]:[])]));
+    settlementsOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('set',e,F)).forEach(e=>rows.push([s.name,e.date,e.date.slice(0,7),'Settlement','','',e.note||'',e.amount,pname(e.from)+' → '+pname(e.to),'',...(PF?[e.to===PF?e.amount:-e.amount]:[])]));
   });
   rows.sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ledger.concat(rows)),'Ledger');
+  // expense categories by month (for pivots / spotting where money goes)
+  const cm={},mset=new Set();
+  sites.forEach(s=>exOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('exp',e,F&&{...F,exp:true})).forEach(e=>{ const c=e.category||'Uncategorised', mm=e.date.slice(0,7); mset.add(mm); cm[c]=cm[c]||{}; cm[c][mm]=(cm[c][mm]||0)+toPaise(e.amount); }));
+  const ms=[...mset].sort();
+  const cats=[[BRAND+' — Expenses by category'],[],['Category',...ms.map(monthLabel),'Total']];
+  Object.entries(cm).map(([c,v])=>[c,v,Object.values(v).reduce((a,x)=>a+x,0)]).sort((a,b)=>b[2]-a[2]).forEach(([c,v,t])=>cats.push([c,...ms.map(mm=>(v[mm]||0)/100),t/100]));
+  cats.push(['TOTAL',...ms.map(mm=>Object.values(cm).reduce((a,v)=>a+(v[mm]||0),0)/100),Object.values(cm).reduce((a,v)=>a+Object.values(v).reduce((x,y)=>x+y,0),0)/100]);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cats),'Categories');
   const months=[[BRAND+' — Month by month'],[],['Month','Income','Expenses','Profit / Loss']];
   const eb={},ib={},sb={}; sites.forEach(s=>{eb[s.id]=exOf(s.id);ib[s.id]=incomesOf(s.id);sb[s.id]=settlementsOf(s.id);});
   computeOverall(sites,eb,ib,sb,{from,to}).byMonth.forEach(m=>months.push([monthLabel(m.month),m.inc/100,m.exp/100,(m.inc-m.exp)/100]));
@@ -1495,12 +1567,35 @@ function viewReports(){
 }
 
 /* Overall monthly P&L: every site combined, month by month, with a site breakdown per month */
+/* Monthly P&L: pick a month (‹ month ›) to see it site by site; the year overview sits below */
+let REP_MONTH=monthStr();
+function repSetMonth(v){ if(!v) return; REP_MONTH=v; render(); }
+function monthSiteRows(m){
+  return siteList().map(s=>{ const r=computeSite(s,repExpOf(s.id),incomesOf(s.id),settlementsOf(s.id),{from:m+'-01',to:m+'-31'}); return {s,inc:r.totalInc,exp:r.totalExp,p:r.totalInc-r.totalExp,setup:r.totalSetupExp}; });
+}
+function monthSitesTableHTML(m,inModal){
+  const rows=monthSiteRows(m).filter(x=>x.inc||x.exp);
+  if(!rows.length) return `<div class="empty"><p>No entries in ${monthLabel(m)}.</p></div>`;
+  const ti=rows.reduce((a,x)=>a+x.inc,0), te=rows.reduce((a,x)=>a+x.exp,0);
+  rows.sort((a,b)=>b.p-a.p);
+  return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Site</th><th>Income</th><th>Expenses</th><th>P / L</th></tr></thead><tbody>`+
+    rows.map(x=>`<tr onclick="${inModal?'closeModal();':''}openSiteMonth('${x.s.id}','${m}','rep')" style="cursor:pointer"><td><b>${esc(x.s.name)}</b>${x.setup&&!REP_NO_SETUP?`<div class="muted">incl. setup ${inr(x.setup)}</div>`:''}</td><td class="g">${inr(x.inc)}</td><td class="r">${inr(x.exp)}</td><td class="${x.p>=0?'g':'r'}"><b>${inr(x.p,{plus:true})}</b></td></tr>`).join('')+
+    `<tr class="totrow"><td><b>Total</b></td><td class="g"><b>${inr(ti)}</b></td><td class="r"><b>${inr(te)}</b></td><td class="${ti-te>=0?'g':'r'}"><b>${inr(ti-te,{plus:true})}</b></td></tr></tbody></table></div><div class="muted" style="margin:6px 2px">Tap a site to open its ${monthLabel(m)} entries.</div>`;
+}
 function repMonthly(){
   const sites=siteList();
+  const m=REP_MONTH||monthStr();
+  let h=`<div class="sec-hdr">Month · site by site</div>`+monthBarHTML(m,'repSetMonth',false);
+  const mo=repOverall(m+'-01',m+'-31');
+  h+=`<div class="card"><div class="kv"><span>Income ${monthLabel(m)}</span><b class="g">${inr(mo.totalInc)}</b></div><div class="kv"><span>Expenses ${monthLabel(m)}</span><b class="r">${inr(mo.totalExp)}</b></div><div class="kv total"><span>${mo.profit<0?'Loss':'Profit'} ${monthLabel(m)}</span><b class="${mo.profit>=0?'g':'r'}">${inr(mo.profit,{plus:true})}</b></div></div>`;
+  h+=monthSitesTableHTML(m,false);
+  h+=bookingBreakdownHTML(sites.map(s=>s.id),m+'-01',m+'-31');
+  h+=`<div class="btn-row"><button class="site-btn share" onclick="openSendReport({scope:'all',period:'month',month:'${m}'})">📤 ${monthLabel(m)} report</button><button class="site-btn pay" onclick="exportReportXLSX(siteList(),'${m}-01','${m}-31',REP_NO_SETUP,'${monthLabel(m)}','UrbanHaven_All_Sites_${monthLabel(m).replace(' ','_')}.xlsx')">📊 Excel</button></div>`;
+
   const years=new Set([new Date().getFullYear()]);
   DB.expenses.concat(DB.incomes).forEach(x=>{ if(!x.deleted&&x.date) years.add(+x.date.slice(0,4)); });
   const ys=[...years].sort();
-  let h=`<div class="filters"><select class="form-select" onchange="REP_YEAR=+this.value;render()">${ys.map(y=>`<option ${y===REP_YEAR?'selected':''}>${y}</option>`).join('')}</select></div>`;
+  h+=`<div class="sec-hdr" style="margin-top:18px">Year overview</div><div class="filters"><select class="form-select" onchange="REP_YEAR=+this.value;render()">${ys.map(y=>`<option ${y===REP_YEAR?'selected':''}>${y}</option>`).join('')}</select></div>`;
   const o=repOverall(REP_YEAR+'-01-01',REP_YEAR+'-12-31');
   const months=o.byMonth;
   const totInc=months.reduce((a,m)=>a+m.inc,0), totExp=months.reduce((a,m)=>a+m.exp,0), totProfit=totInc-totExp;
@@ -1511,18 +1606,13 @@ function repMonthly(){
   const max=Math.max(...months.map(m=>Math.max(m.inc,m.exp)),1);
   h+=`<div class="sec-hdr">Income vs Expenses</div><div class="card"><div class="chart">`+months.map(m=>`<div class="ccol"><div class="cbars"><i class="ci" style="height:${m.inc/max*100}%"></i><i class="ce" style="height:${m.exp/max*100}%"></i></div><div class="clbl">${monthLabel(m.month).slice(0,3)}</div></div>`).join('')+`</div><div class="legend"><span><i class="ci"></i>Income</span><span><i class="ce"></i>Expenses</span></div></div>`;
   h+=`<div class="sec-hdr">Month by month</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Month</th><th>Income</th><th>Expenses</th><th>Profit / Loss</th></tr></thead><tbody>`+
-    months.map(m=>{const p=m.inc-m.exp; return `<tr onclick="REP_MONTH='${m.month}';openMonthDetail('${m.month}')" style="cursor:pointer"><td><b>${monthLabel(m.month)}</b></td><td class="g">${inr(m.inc)}</td><td class="r">${inr(m.exp)}</td><td class="${p>=0?'g':'r'}"><b>${inr(p,{plus:true})}</b></td></tr>`;}).join('')+
-    `<tr class="totrow"><td><b>Total</b></td><td class="g"><b>${inr(totInc)}</b></td><td class="r"><b>${inr(totExp)}</b></td><td class="${totProfit>=0?'g':'r'}"><b>${inr(totProfit,{plus:true})}</b></td></tr></tbody></table></div><div class="muted" style="margin:6px 2px">Tap a month to see it site by site.</div>`;
-  h+=`<div class="btn-row"><button class="site-btn share" onclick="openSendReport({scope:'all',period:'year',year:REP_YEAR})">📤 Send ${REP_YEAR} report</button><button class="site-btn pay" onclick="openSendReport({scope:'all',period:'month'})">📤 Send a month</button></div>`;
+    months.map(mm=>{const p=mm.inc-mm.exp; return `<tr onclick="REP_MONTH='${mm.month}';render();$('scroll').scrollTop=0" style="cursor:pointer${mm.month===m?';background:var(--accentbg)':''}"><td><b>${monthLabel(mm.month)}</b></td><td class="g">${inr(mm.inc)}</td><td class="r">${inr(mm.exp)}</td><td class="${p>=0?'g':'r'}"><b>${inr(p,{plus:true})}</b></td></tr>`;}).join('')+
+    `<tr class="totrow"><td><b>Total</b></td><td class="g"><b>${inr(totInc)}</b></td><td class="r"><b>${inr(totExp)}</b></td><td class="${totProfit>=0?'g':'r'}"><b>${inr(totProfit,{plus:true})}</b></td></tr></tbody></table></div><div class="muted" style="margin:6px 2px">Tap a month to show it site by site at the top.</div>`;
+  h+=`<div class="btn-row"><button class="site-btn share" onclick="openSendReport({scope:'all',period:'year',year:REP_YEAR})">📤 Send ${REP_YEAR} report</button></div>`;
   return h;
 }
-let REP_MONTH='';
 function openMonthDetail(m){
-  const rows=siteList().map(s=>{ const r=computeSite(s,repExpOf(s.id),incomesOf(s.id),settlementsOf(s.id),{from:m+'-01',to:m+'-31'}); const p=r.totalInc-r.totalExp; return {s,inc:r.totalInc,exp:r.totalExp,p}; }).filter(x=>x.inc||x.exp);
-  const ti=rows.reduce((a,x)=>a+x.inc,0), te=rows.reduce((a,x)=>a+x.exp,0);
-  openModal(`<div class="modal-title">${monthLabel(m)}</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Site</th><th>Income</th><th>Expenses</th><th>P / L</th></tr></thead><tbody>`+
-    rows.map(x=>`<tr><td><b>${esc(x.s.name)}</b></td><td class="g">${inr(x.inc)}</td><td class="r">${inr(x.exp)}</td><td class="${x.p>=0?'g':'r'}"><b>${inr(x.p,{plus:true})}</b></td></tr>`).join('')+
-    `<tr class="totrow"><td><b>Total</b></td><td class="g"><b>${inr(ti)}</b></td><td class="r"><b>${inr(te)}</b></td><td class="${ti-te>=0?'g':'r'}"><b>${inr(ti-te,{plus:true})}</b></td></tr></tbody></table></div><button class="submit-btn" onclick="openSendReport({scope:'all',period:'month',month:'${m}'})">📤 Send ${monthLabel(m)} report</button><button class="cancel-btn" onclick="closeModal()">Close</button>`);
+  openModal(`<div class="modal-title">${monthLabel(m)}</div>${monthSitesTableHTML(m,true)}<button class="submit-btn" onclick="openSendReport({scope:'all',period:'month',month:'${m}'})">📤 Send ${monthLabel(m)} report</button><button class="cancel-btn" onclick="closeModal()">Close</button>`);
 }
 
 /* Site-wise P&L: one row per site, sortable, date range */
@@ -1575,6 +1665,26 @@ function partnerFigures(pid,from,to){
   const sum=k=>rows.reduce((a,r)=>a+r[k],0);
   return {rows,incShare:sum('incShare'),expShare:sum('expShare'),profitShare:sum('profitShare'),paidOut:sum('paidOut'),collected:sum('collected'),net:sum('net')};
 }
+/* Real money in and out of one partner's hands in a range, across all sites (paise).
+   bookings = income they received (bookings + refunds); fromP / toP = settlement payments between partners;
+   expenses = what they paid toward expenses from their own pocket. Setup costs follow the report toggle. */
+function partnerCash(pid,from,to){
+  const inR=d=>(!from||d>=from)&&(!to||d<=to);
+  const sites=new Set(siteList().map(s=>s.id));
+  let bookings=0,capital=0,expenses=0,fromP=0,toP=0;
+  DB.incomes.filter(i=>!i.deleted&&sites.has(i.siteId)&&inR(i.date)).forEach(i=>{ const v=sumLines(i.receivedBy)[pid]||0; if(i.kind==='capital') capital+=v; else bookings+=v; });
+  DB.expenses.filter(e=>!e.deleted&&sites.has(e.siteId)&&inR(e.date)&&!(REP_NO_SETUP&&e.kind==='setup')).forEach(e=>{ expenses+=sumLines(e.paidBy)[pid]||0; });
+  DB.settlements.filter(x=>!x.deleted&&sites.has(x.siteId)&&inR(x.date)).forEach(x=>{ const a=toPaise(x.amount); if(x.to===pid) fromP+=a; if(x.from===pid) toP+=a; });
+  return {bookings,capital,expenses,fromP,toP,net:bookings+fromP-expenses-toP};
+}
+function partnerCashTableHTML(ps,rg){
+  const rows=ps.map(p=>({p,c:partnerCash(p.id,rg.from,rg.to)})).filter(x=>x.c.bookings||x.c.expenses||x.c.fromP||x.c.toP);
+  if(!rows.length) return '';
+  const cls=v=>v>0?'g':v<0?'r':'';
+  return `<div class="sec-hdr">Money in &amp; out · ${esc(rg.label)}</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Partner</th><th>Received (bookings)</th><th>Paid from pocket</th><th>Got from partners</th><th>Paid to partners</th><th>Net in hand</th></tr></thead><tbody>`+
+    rows.map(({p,c})=>`<tr onclick="REP_PARTNER='${p.id}';render()" style="cursor:pointer"><td><b>${esc(p.name)}</b></td><td class="g">${inr(c.bookings)}</td><td class="r">${inr(c.expenses)}</td><td>${inr(c.fromP)}</td><td>${inr(c.toP)}</td><td class="${cls(c.net)}"><b>${inr(c.net,{plus:true})}</b></td></tr>`).join('')+
+    `</tbody></table></div><div class="muted" style="margin:6px 2px 10px">Actual cash: bookings that landed with them, expenses they paid, and settlement payments between partners in this period. "Net in hand" is not their profit — see Profit share above.</div>`;
+}
 /* Every entry in the range that touched this partner — what they paid / received */
 function partnerEntries(pid,from,to){
   const inR=d=>(!from||d>=from)&&(!to||d<=to);
@@ -1616,6 +1726,7 @@ function repPartner(){
       rows.map(({p,f})=>`<tr onclick="REP_PARTNER='${p.id}';render()" style="cursor:pointer"><td><b>${esc(p.name)}</b><div class="muted">${f.rows.length} site${f.rows.length>1?'s':''}</div></td><td class="g">${inr(f.incShare)}</td><td class="r">${inr(f.expShare)}</td><td class="${cls(f.profitShare)}"><b>${inr(f.profitShare,{plus:true})}</b></td><td>${inr(f.paidOut)}</td><td>${inr(f.collected)}</td></tr>`).join('')+
       `<tr class="totrow"><td><b>Total</b></td><td class="g"><b>${inr(t('incShare'))}</b></td><td class="r"><b>${inr(t('expShare'))}</b></td><td class="${cls(t('profitShare'))}"><b>${inr(t('profitShare'),{plus:true})}</b></td><td><b>${inr(t('paidOut'))}</b></td><td><b>${inr(t('collected'))}</b></td></tr></tbody></table></div>
       <div class="muted" style="margin:6px 2px">Tap a partner for their site-by-site and entry-by-entry statement.</div>`;
+    h+=partnerCashTableHTML(ps,rg);
     h+=`<div class="btn-row"><button class="site-btn pay" onclick="exportPartnerXLSX()">📊 Excel</button></div>`;
     return h;
   }
@@ -1648,6 +1759,7 @@ function repPartner(){
       <div class="kv"><span>Income received by ${esc(pname(REP_PARTNER))}</span><b class="g">${inr(recd)}</b></div>
       <div class="kv"><span>Expenses paid by ${esc(pname(REP_PARTNER))}</span><b class="r">${inr(paid)}</b></div>
       ${cap?`<div class="kv"><span>Capital held</span><b class="b">${inr(cap)}</b></div>`:''}
+      ${(()=>{const c=partnerCash(REP_PARTNER,rg.from,rg.to); return (c.fromP||c.toP)?`<div class="kv"><span>Got from other partners (settlements)</span><b>${inr(c.fromP)}</b></div><div class="kv"><span>Paid to other partners (settlements)</span><b>${inr(c.toP)}</b></div><div class="kv total"><span>Net cash in hand this period</span><b class="${c.net>0?'g':c.net<0?'r':''}">${inr(c.net,{plus:true})}</b></div>`:'';})()}
       ${Object.keys(cats).length?`<div style="margin-top:8px">`+Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([c,v])=>`<div class="bar-row"><div class="bar-top"><span>${esc(c)}</span><b>${inr(v)}</b></div><div class="bar"><i style="width:${Math.max(2,v/paid*100)}%"></i></div></div>`).join('')+`</div>`:''}</div>`;
   }
   h+=`<div class="sec-hdr">${PP_ONLY?'Their entries':'Entries'} (${ents.length})</div>`;
@@ -1670,7 +1782,7 @@ function exportPartnerXLSX(){
   const sum=[[BRAND+' — Partner-wise report'],['Period',rg.label],['Entries',PP_ONLY?'Only entries paid / received by the partner':'All entries on the partner\'s sites'],['One-time setup costs',REP_NO_SETUP?'Excluded':'Included'],['Generated',fmtDate(todayStr())+' by '+ME.name],[],['Partner','Income share','Expense share','Profit share','Paid out','Collected','Position (+ is owed)']];
   const bySite=[['Partner','Site','Profit %','Income share','Expense share','Profit share','Paid out','Collected']];
   const ent=PP_ONLY?[['Partner','Date','Site','Type','Category / source','Description','Paid / received by partner','Full entry amount']]:[['Partner','Date','Site','Type','Description','Entry amount','Paid / received by partner']];
-  const own=[['Partner','Income received by them','Expenses paid by them','Capital held']];
+  const own=[['Partner','Income received by them','Expenses paid by them','Capital held','Got from other partners','Paid to other partners','Net cash in hand']];
   ids.forEach(pid=>{
     const f=partnerFigures(pid,rg.from,rg.to); if(!f.rows.length) return;
     sum.push([pname(pid),f.incShare/100,f.expShare/100,f.profitShare/100,f.paidOut/100,f.collected/100,f.net/100]);
@@ -1679,7 +1791,7 @@ function exportPartnerXLSX(){
     es.forEach(e=>{ const T={exp:'Expense',inc:'Income',cap:'Capital',ref:'Refund'}[e.type];
       ent.push(PP_ONLY?[pname(pid),e.date,siteById(e.site)?.name||'',T,e.cat||'',e.text,e.mine/100,e.total/100]:[pname(pid),e.date,siteById(e.site)?.name||'',T,e.text,e.total/100,e.mine/100]); });
     const mineAll=(()=>{const o=PP_ONLY; PP_ONLY=true; const r=partnerEntries(pid,rg.from,rg.to); PP_ONLY=o; return r;})();
-    own.push([pname(pid),mineAll.filter(e=>e.type==='inc'||e.type==='ref').reduce((a,e)=>a+e.mine,0)/100,mineAll.filter(e=>e.type==='exp').reduce((a,e)=>a+e.mine,0)/100,mineAll.filter(e=>e.type==='cap').reduce((a,e)=>a+e.mine,0)/100]);
+    own.push([pname(pid),mineAll.filter(e=>e.type==='inc'||e.type==='ref').reduce((a,e)=>a+e.mine,0)/100,mineAll.filter(e=>e.type==='exp').reduce((a,e)=>a+e.mine,0)/100,mineAll.filter(e=>e.type==='cap').reduce((a,e)=>a+e.mine,0)/100,...(c=>[c.fromP/100,c.toP/100,c.net/100])(partnerCash(pid,rg.from,rg.to))]);
   });
   sum.push([],['Own money (paid / received personally)'],...own);
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sum),'Summary');
@@ -2406,7 +2518,7 @@ function makePDF(sitesToShow,title,from,to,ropts){
   const checkY=(y,need=10)=>{ if(y+need>PH-14) y=addPage(); return y; };
   const hr=(y,col=BDR)=>{ doc.setDrawColor(...col);doc.setLineWidth(0.25);doc.line(ML,y,MR,y);return y+1; };
   let y=addPage();
-  const period=((from||to)?('Period: '+(from?fmtDPdf(from):'start')+' to '+(to?fmtDPdf(to):'today')):'Period: all time')+(ropts.noSetup?'  |  One-time setup costs excluded':'');
+  const period=((from||to)?('Period: '+(from?fmtDPdf(from):'start')+' to '+(to?fmtDPdf(to):'today')):'Period: all time')+(ropts.noSetup?'  |  One-time setup costs excluded':'')+(ropts.f?'  |  Ledger: '+ledgerFilterLabel(ropts.f):'');
 
   // overall summary when more than one site
   if(sitesToShow.length>1){
@@ -2459,9 +2571,9 @@ function makePDF(sitesToShow,title,from,to,ropts){
     y=checkY(y,25); doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...DARK);doc.text('Complete Ledger',ML,y);y+=2;y=hr(y,O);y+=3;
     doc.setFillColor(...O);doc.rect(ML,y-1,CW,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...WHITE);doc.text('Date',ML+1,y+4);doc.text('Type',ML+24,y+4);doc.text('Description',ML+44,y+4);doc.text('Amount',MR-1,y+4,{align:'right'});y+=9;
     const inR=d=>(!from||d>=from)&&(!to||d<=to);
-    const entries=[...exOf(site.id).filter(e=>inR(e.date)).map(e=>({d:e.date,t:e.kind==='setup'?'SETUP':'EXPENSE',amt:e.amount,desc:[e.note,e.category,e.vendor?'to '+e.vendor:'','paid by '+(e.paidBy||[]).map(l=>pname(l.pid)).join('+')].filter(Boolean).join(' · '),c:RED})),
-      ...incomesOf(site.id).filter(e=>inR(e.date)).map(e=>({d:e.date,t:e.kind==='capital'?'CAPITAL':e.kind==='refund'?'REFUND':'INCOME',amt:e.amount,desc:[e.note,e.source,(e.kind==='capital'?'from '+(e.contributedBy||[]).map(l=>pname(l.pid)).join('+')+' to be held by ':'recd by ')+(e.receivedBy||[]).map(l=>pname(l.pid)).join('+')].filter(Boolean).join(' · '),c:GREEN})),
-      ...settlementsOf(site.id).filter(e=>inR(e.date)).map(e=>({d:e.date,t:'SETTLE',amt:e.amount,desc:pname(e.from)+' paid '+pname(e.to)+(e.note?' · '+e.note:''),c:[43,110,240]}))].sort((a,b)=>a.d.localeCompare(b.d));
+    const entries=[...exOf(site.id).filter(e=>inR(e.date)&&ledgerKeep('exp',e,ropts.f)).map(e=>({d:e.date,t:e.kind==='setup'?'SETUP':'EXPENSE',amt:e.amount,desc:[e.note,e.category,e.vendor?'to '+e.vendor:'','paid by '+(e.paidBy||[]).map(l=>pname(l.pid)).join('+')].filter(Boolean).join(' · '),c:RED})),
+      ...incomesOf(site.id).filter(e=>inR(e.date)&&ledgerKeep('inc',e,ropts.f)).map(e=>({d:e.date,t:e.kind==='capital'?'CAPITAL':e.kind==='refund'?'REFUND':'INCOME',amt:e.amount,desc:[e.note,e.source,(e.kind==='capital'?'from '+(e.contributedBy||[]).map(l=>pname(l.pid)).join('+')+' to be held by ':'recd by ')+(e.receivedBy||[]).map(l=>pname(l.pid)).join('+')].filter(Boolean).join(' · '),c:GREEN})),
+      ...settlementsOf(site.id).filter(e=>inR(e.date)&&ledgerKeep('set',e,ropts.f)).map(e=>({d:e.date,t:'SETTLE',amt:e.amount,desc:pname(e.from)+' paid '+pname(e.to)+(e.note?' · '+e.note:''),c:[43,110,240]}))].sort((a,b)=>a.d.localeCompare(b.d));
     alt=false; entries.forEach(e=>{ y=checkY(y,8); if(alt){doc.setFillColor(...LIGHT);doc.rect(ML,y-1,CW,7,'F');} alt=!alt; doc.setFont('helvetica','normal');doc.setFontSize(7.2);doc.setTextColor(...DARK);doc.text(fmtDPdf(e.d),ML+1,y+4); doc.setFont('helvetica','bold');doc.setFontSize(6.6);doc.setTextColor(...e.c);doc.text(e.t,ML+24,y+4); doc.setFont('helvetica','normal');doc.setFontSize(7.2);doc.setTextColor(...DARK);doc.text(doc.splitTextToSize(e.desc||'-',108)[0],ML+44,y+4); doc.setFont('helvetica','bold');doc.setTextColor(...e.c);doc.text(pdfMoney(toPaise(e.amt)),MR-1,y+4,{align:'right'});doc.setDrawColor(...BDR);doc.setLineWidth(0.15);doc.line(ML,y+6,MR,y+6);y+=7; });
     }
   });
