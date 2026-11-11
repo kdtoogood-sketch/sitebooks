@@ -1527,7 +1527,7 @@ function openSpreadForm(id){
     <div class="form-group"><label class="form-label">Spread setup / one-time costs over (months)</label><input type="number" min="1" max="120" class="form-input" id="sp_setup" value="${c.setup}"></div>
     <label class="chk" style="margin:0 0 10px"><input type="checkbox" id="sp_depon" ${c.depOn?'checked':''} onchange="$('sp_depbox').style.display=this.checked?'':'none'"> Spread the security deposit too</label>
     <div class="form-group" id="sp_depbox" style="${c.depOn?'':'display:none'}"><label class="form-label">Spread security deposit over (months)</label><input type="number" min="1" max="120" class="form-input" id="sp_dep" value="${c.dep}"></div>
-    <div class="muted" style="margin-bottom:12px">Each bill is spread from the month it was paid. Deposits are entries marked Setup whose category or note says “deposit” or “security”.</div>
+    <div class="muted" style="margin-bottom:12px">Each bill is spread from the month it was paid, or from the site’s start date (${s.startDate?fmtDate(s.startDate):'not set'}) if it was paid before. The opening month gets a part share for the days the site ran; the rest is charged at the end. Deposits are entries marked Setup whose category or note says “deposit” or “security”.</div>
     <button class="submit-btn" onclick="saveSpreadForm('${id}')">Save</button><button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
 }
 function saveSpreadForm(id){
@@ -1602,16 +1602,25 @@ function setSetupMode(m){ REP_SETUP=m; REP_NO_SETUP=m!=='paid'; try{ localStorag
 function modeOf(x){ return x===true?'out':(x===false||x==null)?'paid':x; }
 const isDeposit=e=>e.kind==='setup'&&/deposit|security/i.test((e.category||'')+' '+(e.note||''));
 function siteSpreadCfg(s){ s=s||{}; const n=v=>Math.max(1,Math.min(120,Math.round(Number(v)||12))); return {setup:n(s.setupMonths),dep:n(s.depositMonths),depOn:s.depositSpread!==false}; }
-/* One setup bill → n monthly shares (paise-exact; the last share takes the rounding) */
-function spreadShares(e,n,upto){
-  const tot=toPaise(e.amount), m0=(e.date||todayStr()).slice(0,7), base=Math.floor(tot/n);
+/* One setup bill → monthly shares over n months (paise-exact).
+   Spreading starts on the site's start date if the bill was paid before it. In the site's opening month the
+   share is pro-rata for the days the site ran (e.g. started 15 Oct → 17/31 of a month's share); the leftover
+   fraction is charged in one extra month at the end, so the full bill is always recovered. */
+function spreadShares(e,n,upto,siteStart){
+  const tot=toPaise(e.amount);
+  let start=e.date||todayStr(); if(siteStart&&start<siteStart) start=siteStart;
+  const m0=start.slice(0,7);
+  let f=1;
+  if(siteStart&&m0===siteStart.slice(0,7)){ const [y,mo,d]=siteStart.split('-').map(Number); const dim=new Date(y,mo,0).getDate(); f=(dim-d+1)/dim; }
+  const cum=k=>Math.round(tot*Math.min(1,(f+k)/n));
+  const count=Math.ceil(n-f-1e-9)+1;
   const lines=(e.paidBy||[]).map(l=>({pid:l.pid,p:toPaise(l.amount)}));
   const out=[];
-  for(let i=0;i<n;i++){
+  for(let i=0;i<count;i++){
+    const amt=cum(i)-(i?cum(i-1):0); if(amt<=0&&i) continue;
     const mm=shiftMonth(m0,i); if(upto&&mm>upto) break;
-    const amt=i===n-1?tot-base*(n-1):base;
     let left=amt; const pb=lines.map((l,j)=>{ const v=j===lines.length-1?left:Math.round(l.p*amt/(tot||1)); left-=v; return {pid:l.pid,amount:v/100}; });
-    out.push({...e,id:e.id+'~'+i,amount:amt/100,paidBy:pb,date:i?mm+'-01':e.date,_share:{i,n,total:tot},note:(e.note||e.category||'Setup')+' · share '+(i+1)+'/'+n});
+    out.push({...e,id:e.id+'~'+i,amount:amt/100,paidBy:pb,date:i?mm+'-01':start,_share:{i,n,total:tot,part:(i===0&&f<1)||i===count-1&&f<1},note:(e.note||e.category||'Setup')+' · share '+(i+1)+(f<1&&(i===0||i===count-1)?' (part month)':'')+' of '+n+' months'});
   }
   return out;
 }
@@ -1619,15 +1628,15 @@ function expForMode(sid,mode){
   const all=expensesOf(sid); mode=modeOf(mode);
   if(mode==='paid') return all;
   const run=all.filter(e=>e.kind!=='setup'); if(mode==='out') return run;
-  const c=siteSpreadCfg(siteById(sid)), upto=monthStr(), out=run.slice();
-  all.filter(e=>e.kind==='setup').forEach(e=>{ const dep=isDeposit(e); if(dep&&!c.depOn) return; out.push(...spreadShares(e,dep?c.dep:c.setup,upto)); });
+  const site=siteById(sid), c=siteSpreadCfg(site), upto=monthStr(), out=run.slice();
+  all.filter(e=>e.kind==='setup').forEach(e=>{ const dep=isDeposit(e); if(dep&&!c.depOn) return; out.push(...spreadShares(e,dep?c.dep:c.setup,upto,site&&site.startDate)); });
   return out;
 }
 /* Setup / deposit recovery status for a site (paise) */
 function setupRecovery(s){
   const c=siteSpreadCfg(s), now=monthStr(); const r={setup:0,dep:0,setupRec:0,depRec:0,setupMonthly:0,depMonthly:0,left:0,depLeft:0};
   expensesOf(s.id).filter(e=>e.kind==='setup').forEach(e=>{ const dep=isDeposit(e), n=dep?c.dep:c.setup, tot=toPaise(e.amount);
-    const done=spreadShares(e,n,now), rec=done.reduce((a,x)=>a+toPaise(x.amount),0), left=n-done.length;
+    const allSh=spreadShares(e,n,null,s.startDate), done=allSh.filter(x=>x.date.slice(0,7)<=now), rec=done.reduce((a,x)=>a+toPaise(x.amount),0), left=allSh.length-done.length;
     if(dep){ r.dep+=tot; r.depRec+=rec; if(left>0){ r.depMonthly+=Math.round(tot/n); r.depLeft=Math.max(r.depLeft,left); } }
     else { r.setup+=tot; r.setupRec+=rec; if(left>0){ r.setupMonthly+=Math.round(tot/n); r.left=Math.max(r.left,left); } } });
   return r;
