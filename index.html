@@ -70,7 +70,7 @@ body{background:#f0f2f8;color:#1c1d2e;max-width:480px;margin:0 auto;display:flex
 .entry{display:flex;justify-content:space-between;gap:10px;background:var(--card);border:1.5px solid var(--border);border-radius:13px;padding:11px 12px;margin-bottom:8px;align-items:flex-start;cursor:pointer}
 .entry-t{font-size:13px;font-weight:700}.entry-s{font-size:11px;color:var(--muted);margin-top:2px}.entry-a{font-size:14px;font-weight:900;white-space:nowrap}
 .tagsetup{color:var(--purple)}.tagov{color:var(--accent)}
-.mbar{flex-wrap:wrap}.mbar input[type=month]{flex:1;min-width:120px;max-width:180px}.mbar .mini-btn{padding:8px 12px;font-size:11px;background:var(--card2);color:var(--text2);border:1.5px solid var(--border)}.mbar .mini-btn.on{background:var(--accentbg);color:var(--accent);border-color:var(--accentborder)}
+.mbar{flex-wrap:wrap}.setupmode{gap:6px}.mbar input[type=month]{flex:1;min-width:120px;max-width:180px}.mbar .mini-btn{padding:8px 12px;font-size:11px;background:var(--card2);color:var(--text2);border:1.5px solid var(--border)}.mbar .mini-btn.on{background:var(--accentbg);color:var(--accent);border-color:var(--accentborder)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}.chips label{display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:999px;font-size:12px;background:var(--card);cursor:pointer}
 .mini-btn{border:none;border-radius:999px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0}.mini-btn.edit{background:var(--bluebg);color:var(--blue)}.mini-btn.del{background:var(--redbg);color:var(--red)}
 /* tables */
@@ -756,13 +756,13 @@ function viewHome(){
   const sites=siteList();
   if(!sites.length) return `<div class="empty"><div class="emo">🏠</div><p>No sites yet.<br>Add your first rented property to start tracking.</p><button class="submit-btn" style="max-width:220px;margin:14px auto 0" onclick="openAddSite()">+ Add Site</button></div>`;
   const m=HOME_M; const first=m?m+'-01':'', last=m?m+'-31':'';
-  const all=overallForRange('',''), mon=m?overallForRange(first,last):all;
+  const all=overallForRange('',''), allP=repOverall('',''), mon=m?repOverall(first,last):allP;   // all = real money (settlements); allP/mon = profit view (setup mode)
   const cls=v=>v>0?'g':v<0?'r':'';
   let h=`<div class="hero">
     <div class="hero-lbl">${m?monthLabel(m):'All time'} · all sites</div>
     <div class="hero-val ${cls(mon.profit)}">${inr(mon.profit,{plus:true})}</div>
-    <div class="hero-sub">${mon.profit>=0?'Profit':'Loss'} ${m?(m===monthStr()?'this month':'in '+monthLabel(m)):'so far'}</div>
-    <div class="hero-row"><div><b>${inr(mon.totalInc)}</b><span>Income</span></div><div><b>${inr(mon.totalExp)}</b><span>Expenses</span></div><div><b class="${cls(all.profit)}">${inr(all.profit,{plus:true})}</b><span>All-time</span></div></div>
+    <div class="hero-sub">${mon.profit>=0?'Profit':'Loss'} ${m?(m===monthStr()?'this month':'in '+monthLabel(m)):'so far'}${REP_SETUP==='spread'?' · setup spread monthly':REP_SETUP==='out'?' · setup left out':''}</div>
+    <div class="hero-row"><div><b>${inr(mon.totalInc)}</b><span>Income</span></div><div><b>${inr(mon.totalExp)}</b><span>Expenses</span></div><div><b class="${cls(allP.profit)}">${inr(allP.profit,{plus:true})}</b><span>All-time</span></div></div>
   </div>`+monthBarHTML(m,'homeSetMonth',true);
   // who owes whom overall
   if(all.transfers.length){
@@ -774,7 +774,7 @@ function viewHome(){
   h+=`<div class="qa-row"><button class="qa-exp" onclick="quickAdd('exp')">＋ Expense</button><button class="qa-inc" onclick="quickAdd('inc')">＋ Income</button></div>`;
   h+=`<button class="cancel-btn" style="margin:0 0 4px;background:var(--bluebg);color:var(--blue);border-color:var(--blue)" onclick="openCsvImport()">⬆️ Import Airbnb CSV</button>`;
   h+=`<div class="sec-hdr">Sites${m?' · '+monthLabel(m):' · all time'} <button class="add-btn" onclick="openAddSite()">+ Add</button></div>`;
-  const allBy={}; all.per.forEach(({site,res})=>allBy[site.id]=res);
+  const allBy={}; allP.per.forEach(({site,res})=>allBy[site.id]=res);
   h+=mon.per.map(({site,res})=>siteCard(site,res,{month:m,allTime:m?allBy[site.id]:null})).join('');
   return h;
 }
@@ -803,7 +803,7 @@ function viewSites(){
   let h=`<div class="sec-hdr">All Sites <span><button class="add-btn" style="background:var(--bluebg);color:var(--blue)" onclick="openCsvImport()">⬆️ Airbnb CSV</button> <button class="add-btn" onclick="openAddSite()">+ Add</button></span></div>`;
   if(!sites.length) return h+`<div class="empty"><div class="emo">🏗️</div><p>No sites yet.</p></div>`;
   h=`<div class="qa-row"><button class="qa-exp" onclick="quickAdd('exp')">＋ Expense</button><button class="qa-inc" onclick="quickAdd('inc')">＋ Income</button></div>`+h;
-  const all=overallForRange('','');
+  const all=repOverall('','');
   return h+all.per.map(({site,res})=>siteCard(site,res)).join('');
 }
 
@@ -942,10 +942,12 @@ function viewSite(){
   const s=siteById(CUR_SITE); if(!s) return `<div class="empty"><p>Site not found.</p></div>`;
   const res=computeSite(s,expensesOf(s.id),incomesOf(s.id),settlementsOf(s.id));
   const sm=sitePeriodMonth(), pl=sitePeriodLabel();
-  const pr=(_repFrom||_repTo)?computeSite(s,expensesOf(s.id),incomesOf(s.id),settlementsOf(s.id),{from:_repFrom,to:_repTo}):res;
+  // res = real money (Settle tab); allP / pr = profit view following the report's setup mode
+  const allP=computeSite(s,repExpOf(s.id),incomesOf(s.id),settlementsOf(s.id));
+  const pr=(_repFrom||_repTo)?computeSite(s,repExpOf(s.id),incomesOf(s.id),settlementsOf(s.id),{from:_repFrom,to:_repTo}):allP;
   const cls=pr.profit>0?'g':pr.profit<0?'r':'';
-  let h=`<div class="hero small"><div class="hero-lbl">${esc(s.name)} · ${esc(pl)}</div><div class="hero-val ${cls}">${inr(pr.profit,{plus:true})}</div><div class="hero-sub">${pr.profit<0?'Loss':'Profit'} ${pl==='All time'?'so far':'· '+esc(pl)}</div>
-    <div class="hero-row"><div><b>${inr(pr.totalInc)}</b><span>Income</span></div><div><b>${inr(pr.totalExp)}</b><span>Expenses</span></div>${pr===res?`<div><b>${inr(res.totalSetupExp)}</b><span>Setup cost</span></div>`:`<div><b class="${res.profit>0?'g':res.profit<0?'r':''}">${inr(res.profit,{plus:true})}</b><span>All-time</span></div>`}</div></div>`;
+  let h=`<div class="hero small"><div class="hero-lbl">${esc(s.name)} · ${esc(pl)}</div><div class="hero-val ${cls}">${inr(pr.profit,{plus:true})}</div><div class="hero-sub">${pr.profit<0?'Loss':'Profit'} ${pl==='All time'?'so far':'· '+esc(pl)}${REP_SETUP==='spread'?' · setup spread':REP_SETUP==='out'?' · setup left out':''}</div>
+    <div class="hero-row"><div><b>${inr(pr.totalInc)}</b><span>Income</span></div><div><b>${inr(pr.totalExp)}</b><span>Expenses</span></div>${pr===allP?`<div><b>${inr(res.totalSetupExp)}</b><span>Setup paid</span></div>`:`<div><b class="${allP.profit>0?'g':allP.profit<0?'r':''}">${inr(allP.profit,{plus:true})}</b><span>All-time</span></div>`}</div></div>`;
   h+=monthBarHTML(sm==='custom'?'':sm,'siteSetMonth',true,sm==='custom'?`<span class="muted">Custom: ${esc(pl)}</span>`:'');
   h+=`<div class="tabs">${[['exp','Expenses'],['inc','Income'],['buy','Planner'],['settle','Settle'],['rep','Report'],['setup','Split']].map(([k,l])=>`<div class="tab ${SITE_TAB===k?'on':''}" onclick="SITE_TAB='${k}';render()">${l}</div>`).join('')}</div>`;
   if(SITE_TAB==='exp') h+=siteExpensesHTML(s);
@@ -1336,8 +1338,36 @@ function siteSetupHTML(s){
     <div class="kv"><span>Monthly rent</span><b>${s.monthlyRent?inr(toPaise(s.monthlyRent)):'—'}</b></div><div class="kv"><span>Security deposit</span><b>${s.deposit?inr(toPaise(s.deposit)):'—'}</b></div></div>
     <div class="sec-hdr">Expense split</div><div class="card">${s.expenseSplit.map(x=>`<div class="kv"><span>${esc(pname(x.pid))}</span><b>${x.pct}%</b></div>`).join('')}</div>
     <div class="sec-hdr">Profit split ${same?'<span class="muted">(same as expenses)</span>':''}</div><div class="card">${s.profitSplit.map(x=>`<div class="kv"><span>${esc(pname(x.pid))}</span><b>${x.pct}%</b></div>`).join('')}${!same?`<div class="muted" style="margin-top:6px">Settlement rule: ${s.profitRule==='separate'?'costs by expense ratio, income by profit ratio':'costs pooled against income, profit shared by ratio'}</div>`:''}</div>`;
+  h+=setupRecoveryCardHTML(s,true);
   if(isAdmin()) h+=`<button class="cancel-btn danger" onclick="deleteSite('${s.id}')">Delete this site</button>`;
   return h;
+}
+/* Setup & deposit recovery — how many months each is spread over in reports, and how much is recovered so far */
+function setupRecoveryCardHTML(s,withEdit){
+  const c=siteSpreadCfg(s), r=setupRecovery(s);
+  if(!r.setup&&!r.dep&&!withEdit) return '';
+  const line=(lbl,tot,rec,n,left,monthly,on)=>`<div class="kv"><span>${lbl}<div class="muted">${on?`${inr(monthly||Math.round(tot/n))} a month over ${n} months${left?' · '+left+' month'+(left>1?'s':'')+' left':' · fully recovered'}`:'Not spread — left out of profit'}</div></span><b>${inr(tot)}${on?`<div class="muted" style="font-weight:400">${inr(rec)} recovered</div>`:''}</b></div>`;
+  return `<div class="sec-hdr">Setup cost recovery ${withEdit?`<button class="add-btn" onclick="openSpreadForm('${s.id}')">Edit</button>`:''}</div><div class="card">
+    ${line('Setup / one-time',r.setup,r.setupRec,c.setup,r.left,r.setupMonthly,true)}
+    ${line('Security deposit',r.dep,r.depRec,c.dep,r.depLeft,r.depMonthly,c.depOn)}
+    <div class="muted" style="margin-top:6px">Used when Reports are set to “Setup costs: Spread”. Balances between partners always use what was actually paid.</div></div>`;
+}
+function openSpreadForm(id){
+  const s=siteById(id), c=siteSpreadCfg(s);
+  openModal(`<div class="modal-title">Setup cost recovery · ${esc(s.name)}</div>
+    <div class="form-group"><label class="form-label">Spread setup / one-time costs over (months)</label><input type="number" min="1" max="120" class="form-input" id="sp_setup" value="${c.setup}"></div>
+    <label class="chk" style="margin:0 0 10px"><input type="checkbox" id="sp_depon" ${c.depOn?'checked':''} onchange="$('sp_depbox').style.display=this.checked?'':'none'"> Spread the security deposit too</label>
+    <div class="form-group" id="sp_depbox" style="${c.depOn?'':'display:none'}"><label class="form-label">Spread security deposit over (months)</label><input type="number" min="1" max="120" class="form-input" id="sp_dep" value="${c.dep}"></div>
+    <div class="muted" style="margin-bottom:12px">Each bill is spread from the month it was paid. Deposits are entries marked Setup whose category or note says “deposit” or “security”.</div>
+    <button class="submit-btn" onclick="saveSpreadForm('${id}')">Save</button><button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
+}
+function saveSpreadForm(id){
+  const s=siteById(id); const n=v=>Math.round(Number(v));
+  const a=n($('sp_setup').value), on=$('sp_depon').checked, d=on?n($('sp_dep').value):siteSpreadCfg(s).dep;
+  if(!(a>=1&&a<=120)||!(d>=1&&d<=120)){ toast('Months must be between 1 and 120'); return; }
+  saveRecord('sites',{...s,setupMonths:a,depositMonths:d,depositSpread:on},ME.name);
+  logAction(ME.name,'Setup recovery for '+s.name+': setup '+a+' months, deposit '+(on?d+' months':'not spread'),id);
+  closeModal(); render(); toast('Saved');
 }
 function deleteSite(id){
   const s=siteById(id); const n=expensesOf(id).length+incomesOf(id).length+settlementsOf(id).length;
@@ -1358,11 +1388,12 @@ function siteReportHTML(s,_res){
   let h=setupToggleHTML()+`<div class="filters"><input type="date" class="form-input" value="${_repFrom}" onchange="_repFrom=this.value;render()"><span>to</span><input type="date" class="form-input" value="${_repTo}" onchange="_repTo=this.value;render()">${_repFrom||_repTo?`<button class="mini-btn del" onclick="_repFrom='';_repTo='';render()">Clear</button>`:''}</div>`;
   h+=`<div class="card"><div class="kv"><span>Total income</span><b class="g">${inr(res.totalInc)}</b></div>
     <div class="kv"><span>Running costs</span><b class="r">${inr(res.totalRunExp)}</b></div>
-    <div class="kv"><span>Setup / one-time costs${REP_NO_SETUP?' <small style="color:var(--accent)">(excluded)</small>':''}</span><b class="${REP_NO_SETUP?'muted':'r'}" style="${REP_NO_SETUP?'text-decoration:line-through':''}">${inr(resFull.totalSetupExp)}</b></div>
+    ${REP_SETUP==='spread'?`<div class="kv"><span>Setup &amp; deposit share <small class="muted">(of ${inr(resFull.totalSetupExp)} paid)</small></span><b class="r">${inr(res.totalSetupExp)}</b></div>`:`<div class="kv"><span>Setup / one-time costs${REP_SETUP==='out'?' <small style="color:var(--accent)">(left out)</small>':''}</span><b class="${REP_SETUP==='out'?'muted':'r'}" style="${REP_SETUP==='out'?'text-decoration:line-through':''}">${inr(resFull.totalSetupExp)}</b></div>`}
     ${res.totalRefund?`<div class="kv"><span>Refunds received</span><b class="g">${inr(res.totalRefund)}</b></div>`:''}
     <div class="kv total"><span>${res.profit<0?'Net loss':'Net profit'}</span><b class="${cls}">${inr(res.profit,{plus:true})}</b></div>
     <div class="kv"><span>Profit before setup costs</span><b class="${res.runningProfit>=0?'g':'r'}">${inr(res.runningProfit,{plus:true})}</b></div>
     ${res.totalCapital?`<div class="kv"><span>Partner capital put in</span><b class="b">${inr(res.totalCapital)}</b></div>`:''}</div>`;
+  if(REP_SETUP==='spread') h+=setupRecoveryCardHTML(s,false);
   h+=bookingBreakdownHTML([s.id],_repFrom,_repTo);
 
   // partner table
@@ -1388,19 +1419,64 @@ function siteReportHTML(s,_res){
 
 /* ════════════ REPORT OPTIONS — exclude setup costs + "Send Report" builder ════════════ */
 const BRAND='Urban Haven';
-let REP_NO_SETUP=false;   // when ticked, one-time setup expenses are left out of report profit figures
-const repExpOf=sid=>REP_NO_SETUP?expensesOf(sid).filter(e=>e.kind!=='setup'):expensesOf(sid);
+/* ════ SETUP COSTS IN REPORTS ════
+   REP_SETUP: 'paid'   = setup bills count in full in the month they were paid
+              'spread' = each setup bill is spread over the site's months (default 12) from the month it was paid;
+                         the security deposit too, unless switched off on the site (then it is left out)
+              'out'    = setup bills left out of profit
+   Only PROFIT figures change. Who-owes-whom, settlements and partner cash always use the real payments.
+   Spread shares are counted only up to the current month (what has been recovered so far). */
+const SETUP_KEY='sitebooks_setupmode_v1';
+let REP_SETUP=(()=>{ try{ const v=localStorage.getItem(SETUP_KEY); return ['paid','spread','out'].includes(v)?v:'spread'; }catch(e){ return 'spread'; } })();
+let REP_NO_SETUP=REP_SETUP!=='paid';   // true → partner cash columns are computed from the real (full) payments
+function setSetupMode(m){ REP_SETUP=m; REP_NO_SETUP=m!=='paid'; try{ localStorage.setItem(SETUP_KEY,m); }catch(e){} render(); }
+function modeOf(x){ return x===true?'out':(x===false||x==null)?'paid':x; }
+const isDeposit=e=>e.kind==='setup'&&/deposit|security/i.test((e.category||'')+' '+(e.note||''));
+function siteSpreadCfg(s){ s=s||{}; const n=v=>Math.max(1,Math.min(120,Math.round(Number(v)||12))); return {setup:n(s.setupMonths),dep:n(s.depositMonths),depOn:s.depositSpread!==false}; }
+/* One setup bill → n monthly shares (paise-exact; the last share takes the rounding) */
+function spreadShares(e,n,upto){
+  const tot=toPaise(e.amount), m0=(e.date||todayStr()).slice(0,7), base=Math.floor(tot/n);
+  const lines=(e.paidBy||[]).map(l=>({pid:l.pid,p:toPaise(l.amount)}));
+  const out=[];
+  for(let i=0;i<n;i++){
+    const mm=shiftMonth(m0,i); if(upto&&mm>upto) break;
+    const amt=i===n-1?tot-base*(n-1):base;
+    let left=amt; const pb=lines.map((l,j)=>{ const v=j===lines.length-1?left:Math.round(l.p*amt/(tot||1)); left-=v; return {pid:l.pid,amount:v/100}; });
+    out.push({...e,id:e.id+'~'+i,amount:amt/100,paidBy:pb,date:i?mm+'-01':e.date,_share:{i,n,total:tot},note:(e.note||e.category||'Setup')+' · share '+(i+1)+'/'+n});
+  }
+  return out;
+}
+function expForMode(sid,mode){
+  const all=expensesOf(sid); mode=modeOf(mode);
+  if(mode==='paid') return all;
+  const run=all.filter(e=>e.kind!=='setup'); if(mode==='out') return run;
+  const c=siteSpreadCfg(siteById(sid)), upto=monthStr(), out=run.slice();
+  all.filter(e=>e.kind==='setup').forEach(e=>{ const dep=isDeposit(e); if(dep&&!c.depOn) return; out.push(...spreadShares(e,dep?c.dep:c.setup,upto)); });
+  return out;
+}
+/* Setup / deposit recovery status for a site (paise) */
+function setupRecovery(s){
+  const c=siteSpreadCfg(s), now=monthStr(); const r={setup:0,dep:0,setupRec:0,depRec:0,setupMonthly:0,depMonthly:0,left:0,depLeft:0};
+  expensesOf(s.id).filter(e=>e.kind==='setup').forEach(e=>{ const dep=isDeposit(e), n=dep?c.dep:c.setup, tot=toPaise(e.amount);
+    const done=spreadShares(e,n,now), rec=done.reduce((a,x)=>a+toPaise(x.amount),0), left=n-done.length;
+    if(dep){ r.dep+=tot; r.depRec+=rec; if(left>0){ r.depMonthly+=Math.round(tot/n); r.depLeft=Math.max(r.depLeft,left); } }
+    else { r.setup+=tot; r.setupRec+=rec; if(left>0){ r.setupMonthly+=Math.round(tot/n); r.left=Math.max(r.left,left); } } });
+  return r;
+}
+const repExpOf=sid=>expForMode(sid,REP_SETUP);
 function repOverall(from,to){
   const sites=siteList(); const eb={},ib={},sb={};
   sites.forEach(s=>{eb[s.id]=repExpOf(s.id);ib[s.id]=incomesOf(s.id);sb[s.id]=settlementsOf(s.id);});
   return computeOverall(sites,eb,ib,sb,{from,to});
 }
 function setupToggleHTML(){
-  return `<label class="chk" style="margin:0 0 10px;background:${REP_NO_SETUP?'var(--accentbg)':'var(--card)'};border:1.5px solid ${REP_NO_SETUP?'var(--accentborder)':'var(--border)'};border-radius:12px;padding:9px 12px;font-size:12px">
-    <input type="checkbox" ${REP_NO_SETUP?'checked':''} onchange="REP_NO_SETUP=this.checked;render()"> Exclude one-time setup costs${REP_NO_SETUP?' <span style="color:var(--accent);margin-left:auto">ON</span>':''}</label>`;
+  const o=[['paid','As paid'],['spread','Spread'],['out','Leave out']];
+  return `<div class="filters mbar setupmode"><span>Setup costs:</span>${o.map(([k,l])=>`<button class="mini-btn ${REP_SETUP===k?'on':''}" onclick="setSetupMode('${k}')">${l}</button>`).join('')}</div>`+
+    `<div class="muted" style="margin:-4px 2px 10px">${REP_SETUP==='spread'?'Setup bills and security deposits are spread month by month (set on each site’s Split tab, default 12 months). Balances between partners still use what was actually paid.':REP_SETUP==='out'?'Setup bills and deposits are left out of profit.':'Setup bills count in full in the month they were paid.'}</div>`;
 }
+function setupModeLabel(m){ m=modeOf(m); return m==='spread'?'Spread monthly':m==='out'?'Left out':'Counted when paid'; }
 
-let SR={scope:'all',site:'',sel:[],period:'month',month:monthStr(),year:new Date().getFullYear(),from:'',to:'',noSetup:false,ledger:true,f:{exp:true,inc:true,set:true,cat:'',pid:''}};
+let SR={scope:'all',site:'',sel:[],period:'month',month:monthStr(),year:new Date().getFullYear(),from:'',to:'',noSetup:'spread',ledger:true,f:{exp:true,inc:true,set:true,cat:'',pid:''}};
 /* Entry filter for ledgers (Excel 'Ledger' sheet and the PDF ledger). kind: exp | inc | set */
 function ledgerKeep(kind,e,f){
   if(!f) return true;
@@ -1416,7 +1492,7 @@ function ledgerKeep(kind,e,f){
 function ledgerFilterOn(f){ return !!f&&(!f.exp||!f.inc||!f.set||!!f.cat||!!f.pid); }
 function ledgerFilterLabel(f){ if(!ledgerFilterOn(f)) return 'All entries'; const t=[f.exp&&'expenses',f.inc&&'income',f.set&&'settlements'].filter(Boolean).join(', ')||'nothing'; return 'Only '+t+(f.cat?' · category '+f.cat:'')+(f.pid?' · '+pname(f.pid)+"'s entries":''); }
 function openSendReport(pre){
-  SR={...SR,noSetup:REP_NO_SETUP,...(pre||{})};
+  SR={...SR,noSetup:REP_SETUP,...(pre||{})}; SR.noSetup=modeOf(SR.noSetup);
   if(!SR.site||!siteById(SR.site)) SR.site=(siteList()[0]||{}).id||'';
   if(!SR.sel||!SR.sel.length) SR.sel=siteList().map(s=>s.id);
   SR.f={exp:true,inc:true,set:true,cat:'',pid:'',...(SR.f||{})};
@@ -1429,7 +1505,6 @@ function _srKeep(){
   if(v('sr_year')) SR.year=+v('sr_year');
   if(v('sr_from')!==null) SR.from=v('sr_from');
   if(v('sr_to')!==null) SR.to=v('sr_to');
-  if($('sr_ns')) SR.noSetup=$('sr_ns').checked;
   if($('sr_lg')) SR.ledger=$('sr_lg').checked;
   if(SR.scope==='pick'&&$('sr_pickbox')) SR.sel=siteList().filter(s=>$('sr_sel_'+s.id)&&$('sr_sel_'+s.id).checked).map(s=>s.id);
   if($('sr_fexp')) SR.f={exp:$('sr_fexp').checked,inc:$('sr_finc').checked,set:$('sr_fset').checked,cat:$('sr_fcat').value,pid:$('sr_fpid').value};
@@ -1441,7 +1516,8 @@ function srRange(){
   return {from:'',to:'',label:'All time'};
 }
 function srSites(){ return SR.scope==='all'?siteList():SR.scope==='pick'?siteList().filter(s=>(SR.sel||[]).includes(s.id)):[siteById(SR.site)].filter(Boolean); }
-function _srExpOf(sid){ return SR.noSetup?expensesOf(sid).filter(e=>e.kind!=='setup'):expensesOf(sid); }
+function _srExpOf(sid){ return expForMode(sid,SR.noSetup); }
+function _srLedOf(sid){ return SR.noSetup==='out'?expensesOf(sid).filter(e=>e.kind!=='setup'):expensesOf(sid); }
 function _renderSendReport(){
   const sites=siteList();
   const years=new Set([new Date().getFullYear()]);
@@ -1461,14 +1537,15 @@ function _renderSendReport(){
     ${SR.period==='month'?`<div class="form-group"><input type="month" class="form-input" id="sr_month" value="${SR.month}" onchange="${re()}"></div>`:''}
     ${SR.period==='year'?`<div class="form-group"><select class="form-select" id="sr_year" onchange="${re()}">${[...years].sort().map(y=>`<option ${y===SR.year?'selected':''}>${y}</option>`).join('')}</select></div>`:''}
     ${SR.period==='range'?`<div class="form-row"><div class="form-group"><label class="form-label">From</label><input type="date" class="form-input" id="sr_from" value="${SR.from}" onchange="${re()}"></div><div class="form-group"><label class="form-label">To</label><input type="date" class="form-input" id="sr_to" value="${SR.to}" onchange="${re()}"></div></div>`:''}
-    <label class="chk" style="margin:4px 0 8px"><input type="checkbox" id="sr_ns" ${SR.noSetup?'checked':''} onchange="${re()}"> Exclude one-time setup costs</label>
+    <div class="form-label">Setup costs &amp; deposits</div>
+    ${tabs([['paid','As paid'],['spread','Spread monthly'],['out','Leave out']],SR.noSetup,'noSetup')}
     <label class="chk" style="margin:0 0 12px"><input type="checkbox" id="sr_lg" ${SR.ledger?'checked':''}> Include full ledger (every entry) in PDF</label>
     <div class="form-label">Entries in the ledger</div>
     <div class="chips"><label><input type="checkbox" id="sr_fexp" ${SR.f.exp?'checked':''} onchange="${re()}"> Expenses</label><label><input type="checkbox" id="sr_finc" ${SR.f.inc?'checked':''} onchange="${re()}"> Income</label><label><input type="checkbox" id="sr_fset" ${SR.f.set?'checked':''} onchange="${re()}"> Partner payments</label></div>
     <div class="form-row"><div class="form-group"><label class="form-label">Expense category</label><select class="form-select" id="sr_fcat" onchange="${re()}"><option value="">All categories</option>${[...new Set(DB.expenses.filter(e=>!e.deleted&&e.category).map(e=>e.category))].sort().map(c=>`<option ${SR.f.cat===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Paid / received by</label><select class="form-select" id="sr_fpid" onchange="${re()}"><option value="">Anyone</option>${partnerList().map(p=>`<option value="${p.id}" ${SR.f.pid===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div></div>
     <div class="card" style="background:var(--card2)">
-      <div class="muted" style="margin-bottom:4px">${esc(SR.scope==='site'?(ss[0]?ss[0].name:''):SR.scope==='pick'?(ss.length?ss.map(x=>x.name).join(', '):'No site picked'):ss.length+' sites')} · ${esc(rg.label)}${SR.noSetup?' · setup excluded':''}</div>
+      <div class="muted" style="margin-bottom:4px">${esc(SR.scope==='site'?(ss[0]?ss[0].name:''):SR.scope==='pick'?(ss.length?ss.map(x=>x.name).join(', '):'No site picked'):ss.length+' sites')} · ${esc(rg.label)}${SR.noSetup==='out'?' · setup left out':SR.noSetup==='spread'?' · setup spread monthly':''}</div>
       <div class="kv"><span>Income</span><b class="g">${inr(o.totalInc)}</b></div>
       <div class="kv"><span>Expenses</span><b class="r">${inr(o.totalExp)}</b></div>
       <div class="kv total"><span>${o.profit<0?'Loss':'Profit'}</span><b class="${o.profit>=0?'g':'r'}">${inr(o.profit,{plus:true})}</b></div>
@@ -1480,7 +1557,7 @@ function _renderSendReport(){
 }
 function srLedgerCount(ss,rg){
   const inR=d=>(!rg.from||d>=rg.from)&&(!rg.to||d<=rg.to); let n=0,exp=0,inc=0;
-  ss.forEach(s=>{ _srExpOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('exp',e,SR.f)).forEach(e=>{n++;exp+=toPaise(e.amount);});
+  ss.forEach(s=>{ _srLedOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('exp',e,SR.f)).forEach(e=>{n++;exp+=toPaise(e.amount);});
     incomesOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('inc',e,SR.f)).forEach(e=>{n++;if(e.kind!=='capital')inc+=toPaise(e.amount);});
     settlementsOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('set',e,SR.f)).forEach(()=>n++); });
   return {n,exp,inc};
@@ -1507,23 +1584,25 @@ function sendReportXLSX(){
 function exportReportXLSX(sites,from,to,noSetup,label,fname,xo){
   xo=xo||{}; const F=xo.f||null;
   if(!window.XLSX){ alert('Excel library did not load. Check your internet connection and try again.'); return; }
-  const exOf=sid=>noSetup?expensesOf(sid).filter(e=>e.kind!=='setup'):expensesOf(sid);
+  const MODE=modeOf(noSetup); noSetup=MODE!=='paid';
+  const exOf=sid=>expForMode(sid,MODE);
+  const ledOf=sid=>MODE==='out'?expensesOf(sid).filter(e=>e.kind!=='setup'):expensesOf(sid);
   const inR=d=>(!from||d>=from)&&(!to||d<=to);
   const wb=XLSX.utils.book_new();
-  const head=[[BRAND],['Profit & Loss Report'],['Period',label||'All time'],['Sites',sites.length>1?'All sites ('+sites.length+')':sites[0].name],['One-time setup costs',noSetup?'Excluded':'Included'],...(F?[['Ledger filter',ledgerFilterLabel(F)]]:[]),['Generated',fmtDate(todayStr())+' by '+ME.name],[]];
+  const head=[[BRAND],['Profit & Loss Report'],['Period',label||'All time'],['Sites',sites.length>1?'All sites ('+sites.length+')':sites[0].name],['One-time setup costs & deposits',setupModeLabel(MODE)+(MODE==='spread'?' ('+sites.map(x=>x.name+' '+siteSpreadCfg(x).setup+'m').join(', ')+')':'')],...(F?[['Ledger filter',ledgerFilterLabel(F)]]:[]),['Generated',fmtDate(todayStr())+' by '+ME.name],[]];
   const _b=bookingBreakdown(sites.map(x=>x.id),from,to);
   if(_b.withBk) head.splice(head.length-1,0,['Bookings: guest paid',_b.gross/100],['Airbnb / platform fees',_b.fee/100],['TDS deducted',_b.tds/100],['Net booking income in hand',_b.net/100]);
-  const summary=head.concat([['Site','Income (net in hand)','Expenses','Setup cost','Profit / Loss']]);
+  const summary=head.concat([['Site','Income (net in hand)','Expenses',MODE==='spread'?'Setup share (in expenses)':'Setup cost','Profit / Loss']]);
   let ti=0,te=0,ts=0;
   sites.forEach(s=>{ const r=computeSite(s,exOf(s.id),incomesOf(s.id),settlementsOf(s.id),{from,to}); const full=computeSite(s,expensesOf(s.id),incomesOf(s.id),settlementsOf(s.id),{from,to});
-    summary.push([s.name,r.totalInc/100,r.totalExp/100,noSetup?'excluded ('+full.totalSetupExp/100+')':r.totalSetupExp/100,r.profit/100]); ti+=r.totalInc;te+=r.totalExp;ts+=r.totalSetupExp; });
-  if(sites.length>1) summary.push(['TOTAL',ti/100,te/100,noSetup?'excluded':ts/100,(ti-te)/100]);
+    summary.push([s.name,r.totalInc/100,r.totalExp/100,MODE==='out'?'left out ('+full.totalSetupExp/100+')':r.totalSetupExp/100,r.profit/100]); ti+=r.totalInc;te+=r.totalExp;ts+=r.totalSetupExp; });
+  if(sites.length>1) summary.push(['TOTAL',ti/100,te/100,MODE==='out'?'left out':ts/100,(ti-te)/100]);
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(summary),'Summary');
   const PF=F&&F.pid?F.pid:'';
   const ledger=[[BRAND+' — Ledger · '+(label||'All time')+(F?' · '+ledgerFilterLabel(F):'')],[],['Site','Date','Month','Type','Category / Source','Vendor','Note','Amount','Paid / Received by','Custom split',...(PF?[pname(PF)+"'s part"]:[])]];
   const rows=[];
   sites.forEach(s=>{
-    exOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('exp',e,F)).forEach(e=>rows.push([s.name,e.date,e.date.slice(0,7),e.kind==='setup'?'Setup expense':'Expense',e.category||'',e.vendor||'',e.note||'',e.amount,(e.paidBy||[]).map(l=>pname(l.pid)+' '+l.amount).join(' + '),e.split&&e.split.length?e.split.map(x=>pname(x.pid)+' '+x.pct+'%').join(', '):'',...(PF?[(sumLines(e.paidBy)[PF]||0)/100]:[])]));
+    ledOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('exp',e,F)).forEach(e=>rows.push([s.name,e.date,e.date.slice(0,7),e.kind==='setup'?'Setup expense':'Expense',e.category||'',e.vendor||'',e.note||'',e.amount,(e.paidBy||[]).map(l=>pname(l.pid)+' '+l.amount).join(' + '),e.split&&e.split.length?e.split.map(x=>pname(x.pid)+' '+x.pct+'%').join(', '):'',...(PF?[(sumLines(e.paidBy)[PF]||0)/100]:[])]));
     incomesOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('inc',e,F)).forEach(e=>rows.push([s.name,e.date,e.date.slice(0,7),e.kind==='capital'?'Capital':e.kind==='refund'?'Refund':'Income',e.source||'','',e.note||'',e.amount,(e.receivedBy||[]).map(l=>pname(l.pid)+' '+l.amount).join(' + '),'',...(PF?[(sumLines(e.receivedBy)[PF]||0)/100]:[])]));
     settlementsOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('set',e,F)).forEach(e=>rows.push([s.name,e.date,e.date.slice(0,7),'Settlement','','',e.note||'',e.amount,pname(e.from)+' → '+pname(e.to),'',...(PF?[e.to===PF?e.amount:-e.amount]:[])]));
   });
@@ -1531,7 +1610,7 @@ function exportReportXLSX(sites,from,to,noSetup,label,fname,xo){
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ledger.concat(rows)),'Ledger');
   // expense categories by month (for pivots / spotting where money goes)
   const cm={},mset=new Set();
-  sites.forEach(s=>exOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('exp',e,F&&{...F,exp:true})).forEach(e=>{ const c=e.category||'Uncategorised', mm=e.date.slice(0,7); mset.add(mm); cm[c]=cm[c]||{}; cm[c][mm]=(cm[c][mm]||0)+toPaise(e.amount); }));
+  sites.forEach(s=>ledOf(s.id).filter(e=>inR(e.date)&&ledgerKeep('exp',e,F&&{...F,exp:true})).forEach(e=>{ const c=e.category||'Uncategorised', mm=e.date.slice(0,7); mset.add(mm); cm[c]=cm[c]||{}; cm[c][mm]=(cm[c][mm]||0)+toPaise(e.amount); }));
   const ms=[...mset].sort();
   const cats=[[BRAND+' — Expenses by category'],[],['Category',...ms.map(monthLabel),'Total']];
   Object.entries(cm).map(([c,v])=>[c,v,Object.values(v).reduce((a,x)=>a+x,0)]).sort((a,b)=>b[2]-a[2]).forEach(([c,v,t])=>cats.push([c,...ms.map(mm=>(v[mm]||0)/100),t/100]));
@@ -1579,7 +1658,7 @@ function monthSitesTableHTML(m,inModal){
   const ti=rows.reduce((a,x)=>a+x.inc,0), te=rows.reduce((a,x)=>a+x.exp,0);
   rows.sort((a,b)=>b.p-a.p);
   return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Site</th><th>Income</th><th>Expenses</th><th>P / L</th></tr></thead><tbody>`+
-    rows.map(x=>`<tr onclick="${inModal?'closeModal();':''}openSiteMonth('${x.s.id}','${m}','rep')" style="cursor:pointer"><td><b>${esc(x.s.name)}</b>${x.setup&&!REP_NO_SETUP?`<div class="muted">incl. setup ${inr(x.setup)}</div>`:''}</td><td class="g">${inr(x.inc)}</td><td class="r">${inr(x.exp)}</td><td class="${x.p>=0?'g':'r'}"><b>${inr(x.p,{plus:true})}</b></td></tr>`).join('')+
+    rows.map(x=>`<tr onclick="${inModal?'closeModal();':''}openSiteMonth('${x.s.id}','${m}','rep')" style="cursor:pointer"><td><b>${esc(x.s.name)}</b>${x.setup&&REP_SETUP!=='out'?`<div class="muted">incl. setup${REP_SETUP==='spread'?' share':''} ${inr(x.setup)}</div>`:''}</td><td class="g">${inr(x.inc)}</td><td class="r">${inr(x.exp)}</td><td class="${x.p>=0?'g':'r'}"><b>${inr(x.p,{plus:true})}</b></td></tr>`).join('')+
     `<tr class="totrow"><td><b>Total</b></td><td class="g"><b>${inr(ti)}</b></td><td class="r"><b>${inr(te)}</b></td><td class="${ti-te>=0?'g':'r'}"><b>${inr(ti-te,{plus:true})}</b></td></tr></tbody></table></div><div class="muted" style="margin:6px 2px">Tap a site to open its ${monthLabel(m)} entries.</div>`;
 }
 function repMonthly(){
@@ -1590,7 +1669,7 @@ function repMonthly(){
   h+=`<div class="card"><div class="kv"><span>Income ${monthLabel(m)}</span><b class="g">${inr(mo.totalInc)}</b></div><div class="kv"><span>Expenses ${monthLabel(m)}</span><b class="r">${inr(mo.totalExp)}</b></div><div class="kv total"><span>${mo.profit<0?'Loss':'Profit'} ${monthLabel(m)}</span><b class="${mo.profit>=0?'g':'r'}">${inr(mo.profit,{plus:true})}</b></div></div>`;
   h+=monthSitesTableHTML(m,false);
   h+=bookingBreakdownHTML(sites.map(s=>s.id),m+'-01',m+'-31');
-  h+=`<div class="btn-row"><button class="site-btn share" onclick="openSendReport({scope:'all',period:'month',month:'${m}'})">📤 ${monthLabel(m)} report</button><button class="site-btn pay" onclick="exportReportXLSX(siteList(),'${m}-01','${m}-31',REP_NO_SETUP,'${monthLabel(m)}','UrbanHaven_All_Sites_${monthLabel(m).replace(' ','_')}.xlsx')">📊 Excel</button></div>`;
+  h+=`<div class="btn-row"><button class="site-btn share" onclick="openSendReport({scope:'all',period:'month',month:'${m}'})">📤 ${monthLabel(m)} report</button><button class="site-btn pay" onclick="exportReportXLSX(siteList(),'${m}-01','${m}-31',REP_SETUP,'${monthLabel(m)}','UrbanHaven_All_Sites_${monthLabel(m).replace(' ','_')}.xlsx')">📊 Excel</button></div>`;
 
   const years=new Set([new Date().getFullYear()]);
   DB.expenses.concat(DB.incomes).forEach(x=>{ if(!x.deleted&&x.date) years.add(+x.date.slice(0,4)); });
@@ -1673,7 +1752,7 @@ function partnerCash(pid,from,to){
   const sites=new Set(siteList().map(s=>s.id));
   let bookings=0,capital=0,expenses=0,fromP=0,toP=0;
   DB.incomes.filter(i=>!i.deleted&&sites.has(i.siteId)&&inR(i.date)).forEach(i=>{ const v=sumLines(i.receivedBy)[pid]||0; if(i.kind==='capital') capital+=v; else bookings+=v; });
-  DB.expenses.filter(e=>!e.deleted&&sites.has(e.siteId)&&inR(e.date)&&!(REP_NO_SETUP&&e.kind==='setup')).forEach(e=>{ expenses+=sumLines(e.paidBy)[pid]||0; });
+  DB.expenses.filter(e=>!e.deleted&&sites.has(e.siteId)&&inR(e.date)&&!(REP_SETUP==='out'&&e.kind==='setup')).forEach(e=>{ expenses+=sumLines(e.paidBy)[pid]||0; });
   DB.settlements.filter(x=>!x.deleted&&sites.has(x.siteId)&&inR(x.date)).forEach(x=>{ const a=toPaise(x.amount); if(x.to===pid) fromP+=a; if(x.from===pid) toP+=a; });
   return {bookings,capital,expenses,fromP,toP,net:bookings+fromP-expenses-toP};
 }
@@ -1690,7 +1769,7 @@ function partnerEntries(pid,from,to){
   const inR=d=>(!from||d>=from)&&(!to||d<=to);
   const mySites=new Set(siteList().filter(s=>(s.partners||[]).some(x=>x.pid===pid)).map(s=>s.id));
   const out=[];
-  DB.expenses.filter(e=>!e.deleted&&mySites.has(e.siteId)&&inR(e.date)&&!(REP_NO_SETUP&&e.kind==='setup')).forEach(e=>{
+  DB.expenses.filter(e=>!e.deleted&&mySites.has(e.siteId)&&inR(e.date)&&!(REP_SETUP==='out'&&e.kind==='setup')).forEach(e=>{
     const mine=sumLines(e.paidBy)[pid]||0;
     out.push({date:e.date,site:e.siteId,type:'exp',text:e.note||e.category||'Expense',cat:e.category||'Uncategorised',total:toPaise(e.amount),mine});
   });
@@ -1779,7 +1858,7 @@ function exportPartnerXLSX(){
   if(!window.XLSX){ alert('Excel library did not load. Check your internet connection and try again.'); return; }
   const rg=ppRange(); const wb=XLSX.utils.book_new();
   const ids=REP_PARTNER==='all'?partnerList().map(p=>p.id):[REP_PARTNER];
-  const sum=[[BRAND+' — Partner-wise report'],['Period',rg.label],['Entries',PP_ONLY?'Only entries paid / received by the partner':'All entries on the partner\'s sites'],['One-time setup costs',REP_NO_SETUP?'Excluded':'Included'],['Generated',fmtDate(todayStr())+' by '+ME.name],[],['Partner','Income share','Expense share','Profit share','Paid out','Collected','Position (+ is owed)']];
+  const sum=[[BRAND+' — Partner-wise report'],['Period',rg.label],['Entries',PP_ONLY?'Only entries paid / received by the partner':'All entries on the partner\'s sites'],['One-time setup costs & deposits',setupModeLabel(REP_SETUP)],['Generated',fmtDate(todayStr())+' by '+ME.name],[],['Partner','Income share','Expense share','Profit share','Paid out','Collected','Position (+ is owed)']];
   const bySite=[['Partner','Site','Profit %','Income share','Expense share','Profit share','Paid out','Collected']];
   const ent=PP_ONLY?[['Partner','Date','Site','Type','Category / source','Description','Paid / received by partner','Full entry amount']]:[['Partner','Date','Site','Type','Description','Entry amount','Paid / received by partner']];
   const own=[['Partner','Income received by them','Expenses paid by them','Capital held','Got from other partners','Paid to other partners','Net cash in hand']];
@@ -2502,7 +2581,9 @@ function fmtDPdf(d){ return fmtDate(d).replace(/ /g,'-'); }
 
 function makePDF(sitesToShow,title,from,to,ropts){
   ropts=ropts||{};
-  const exOf=sid=>ropts.noSetup?expensesOf(sid).filter(e=>e.kind!=='setup'):expensesOf(sid);
+  const MODE=modeOf(ropts.noSetup); ropts.noSetup=MODE!=='paid';
+  const exOf=sid=>expForMode(sid,MODE);
+  const ledOf=sid=>MODE==='out'?expensesOf(sid).filter(e=>e.kind!=='setup'):expensesOf(sid);
   if(!window.jspdf||!window.jspdf.jsPDF){ alert('PDF library did not load. Check your internet connection and try again.'); return null; }
   const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'mm',format:'a4'});
   const PW=210,PH=297,ML=14,MR=196,CW=MR-ML;
@@ -2518,7 +2599,7 @@ function makePDF(sitesToShow,title,from,to,ropts){
   const checkY=(y,need=10)=>{ if(y+need>PH-14) y=addPage(); return y; };
   const hr=(y,col=BDR)=>{ doc.setDrawColor(...col);doc.setLineWidth(0.25);doc.line(ML,y,MR,y);return y+1; };
   let y=addPage();
-  const period=((from||to)?('Period: '+(from?fmtDPdf(from):'start')+' to '+(to?fmtDPdf(to):'today')):'Period: all time')+(ropts.noSetup?'  |  One-time setup costs excluded':'')+(ropts.f?'  |  Ledger: '+ledgerFilterLabel(ropts.f):'');
+  const period=((from||to)?('Period: '+(from?fmtDPdf(from):'start')+' to '+(to?fmtDPdf(to):'today')):'Period: all time')+(MODE==='out'?'  |  Setup costs & deposits left out':MODE==='spread'?'  |  Setup costs & deposits spread monthly':'')+(ropts.f?'  |  Ledger: '+ledgerFilterLabel(ropts.f):'');
 
   // overall summary when more than one site
   if(sitesToShow.length>1){
@@ -2549,7 +2630,7 @@ function makePDF(sitesToShow,title,from,to,ropts){
     doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...DARK);doc.text(site.name,ML+3,y+5);y+=12;
     doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...MUT);doc.text((site.address?site.address+'  |  ':'')+period,ML,y);y+=7;y=hr(y);y+=3;
     const bw=CW/4-2;
-    [['INCOME',res.totalInc,GREEN],['EXPENSES',res.totalExp,RED],[res.profit<0?'LOSS':'PROFIT',res.profit,res.profit>=0?GREEN:RED],[ropts.noSetup?'SETUP (EXCLUDED)':'SETUP COST',resFull.totalSetupExp,ropts.noSetup?MUT:O]].forEach(([l,v,c],i)=>{ const bx=ML+i*(bw+2.7); doc.setLineWidth(0.25);doc.setDrawColor(...BDR);doc.setFillColor(...LIGHT);doc.rect(bx,y,bw,20,'FD');doc.setDrawColor(...c);doc.setLineWidth(1.2);doc.line(bx,y,bx+bw,y);doc.setLineWidth(0.25);doc.setFont('helvetica','bold');doc.setFontSize(6);doc.setTextColor(...MUT);doc.text(l,bx+bw/2,y+6,{align:'center'});doc.setFontSize(v>=100000000?7:9);doc.setTextColor(...c);doc.text(pdfMoney(v),bx+bw/2,y+14,{align:'center'}); }); y+=27;
+    [['INCOME',res.totalInc,GREEN],['EXPENSES',res.totalExp,RED],[res.profit<0?'LOSS':'PROFIT',res.profit,res.profit>=0?GREEN:RED],[MODE==='out'?'SETUP (LEFT OUT)':MODE==='spread'?'SETUP SHARE':'SETUP COST',MODE==='spread'?res.totalSetupExp:resFull.totalSetupExp,MODE==='out'?MUT:O]].forEach(([l,v,c],i)=>{ const bx=ML+i*(bw+2.7); doc.setLineWidth(0.25);doc.setDrawColor(...BDR);doc.setFillColor(...LIGHT);doc.rect(bx,y,bw,20,'FD');doc.setDrawColor(...c);doc.setLineWidth(1.2);doc.line(bx,y,bx+bw,y);doc.setLineWidth(0.25);doc.setFont('helvetica','bold');doc.setFontSize(6);doc.setTextColor(...MUT);doc.text(l,bx+bw/2,y+6,{align:'center'});doc.setFontSize(v>=100000000?7:9);doc.setTextColor(...c);doc.text(pdfMoney(v),bx+bw/2,y+14,{align:'center'}); }); y+=27;
     { const b=bookingBreakdown([site.id],from,to); if(b.withBk){ doc.setFillColor(...LIGHT);doc.rect(ML,y-2,CW,9,'F'); doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...DARK);
       doc.text('Bookings:  Guest paid '+pdfMoney(b.gross)+'   |   Airbnb fees -'+pdfMoney(b.fee)+'   |   TDS -'+pdfMoney(b.tds)+(b.other?'   |   Other -'+pdfMoney(b.other):'')+'   |   Net in hand '+pdfMoney(b.net),ML+2,y+3.5); y+=12; } }
 
@@ -2571,7 +2652,7 @@ function makePDF(sitesToShow,title,from,to,ropts){
     y=checkY(y,25); doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...DARK);doc.text('Complete Ledger',ML,y);y+=2;y=hr(y,O);y+=3;
     doc.setFillColor(...O);doc.rect(ML,y-1,CW,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...WHITE);doc.text('Date',ML+1,y+4);doc.text('Type',ML+24,y+4);doc.text('Description',ML+44,y+4);doc.text('Amount',MR-1,y+4,{align:'right'});y+=9;
     const inR=d=>(!from||d>=from)&&(!to||d<=to);
-    const entries=[...exOf(site.id).filter(e=>inR(e.date)&&ledgerKeep('exp',e,ropts.f)).map(e=>({d:e.date,t:e.kind==='setup'?'SETUP':'EXPENSE',amt:e.amount,desc:[e.note,e.category,e.vendor?'to '+e.vendor:'','paid by '+(e.paidBy||[]).map(l=>pname(l.pid)).join('+')].filter(Boolean).join(' · '),c:RED})),
+    const entries=[...ledOf(site.id).filter(e=>inR(e.date)&&ledgerKeep('exp',e,ropts.f)).map(e=>({d:e.date,t:e.kind==='setup'?'SETUP':'EXPENSE',amt:e.amount,desc:[e.note,e.category,e.vendor?'to '+e.vendor:'','paid by '+(e.paidBy||[]).map(l=>pname(l.pid)).join('+')].filter(Boolean).join(' · '),c:RED})),
       ...incomesOf(site.id).filter(e=>inR(e.date)&&ledgerKeep('inc',e,ropts.f)).map(e=>({d:e.date,t:e.kind==='capital'?'CAPITAL':e.kind==='refund'?'REFUND':'INCOME',amt:e.amount,desc:[e.note,e.source,(e.kind==='capital'?'from '+(e.contributedBy||[]).map(l=>pname(l.pid)).join('+')+' to be held by ':'recd by ')+(e.receivedBy||[]).map(l=>pname(l.pid)).join('+')].filter(Boolean).join(' · '),c:GREEN})),
       ...settlementsOf(site.id).filter(e=>inR(e.date)&&ledgerKeep('set',e,ropts.f)).map(e=>({d:e.date,t:'SETTLE',amt:e.amount,desc:pname(e.from)+' paid '+pname(e.to)+(e.note?' · '+e.note:''),c:[43,110,240]}))].sort((a,b)=>a.d.localeCompare(b.d));
     alt=false; entries.forEach(e=>{ y=checkY(y,8); if(alt){doc.setFillColor(...LIGHT);doc.rect(ML,y-1,CW,7,'F');} alt=!alt; doc.setFont('helvetica','normal');doc.setFontSize(7.2);doc.setTextColor(...DARK);doc.text(fmtDPdf(e.d),ML+1,y+4); doc.setFont('helvetica','bold');doc.setFontSize(6.6);doc.setTextColor(...e.c);doc.text(e.t,ML+24,y+4); doc.setFont('helvetica','normal');doc.setFontSize(7.2);doc.setTextColor(...DARK);doc.text(doc.splitTextToSize(e.desc||'-',108)[0],ML+44,y+4); doc.setFont('helvetica','bold');doc.setTextColor(...e.c);doc.text(pdfMoney(toPaise(e.amt)),MR-1,y+4,{align:'right'});doc.setDrawColor(...BDR);doc.setLineWidth(0.15);doc.line(ML,y+6,MR,y+6);y+=7; });
@@ -2584,13 +2665,13 @@ async function shareOrSave(doc,name){
   try{ if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({title:name,files:[file]}); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
 }
-async function exportSitePDF(id){ const s=siteById(id); const doc=makePDF([s],'Site Ledger Report',_repFrom,_repTo,{noSetup:REP_NO_SETUP}); if(doc) await shareOrSave(doc,'UrbanHaven_Ledger_'+s.name.replace(/[^a-z0-9]+/gi,'_')+'.pdf'); }
-async function exportOverallPDF(){ const doc=makePDF(siteList(),'Profit & Loss Report',_repFrom,_repTo,{noSetup:REP_NO_SETUP}); if(doc) await shareOrSave(doc,'UrbanHaven_PL_Report_'+todayStr()+'.pdf'); }
+async function exportSitePDF(id){ const s=siteById(id); const doc=makePDF([s],'Site Ledger Report',_repFrom,_repTo,{noSetup:REP_SETUP}); if(doc) await shareOrSave(doc,'UrbanHaven_Ledger_'+s.name.replace(/[^a-z0-9]+/gi,'_')+'.pdf'); }
+async function exportOverallPDF(){ const doc=makePDF(siteList(),'Profit & Loss Report',_repFrom,_repTo,{noSetup:REP_SETUP}); if(doc) await shareOrSave(doc,'UrbanHaven_PL_Report_'+todayStr()+'.pdf'); }
 
 function exportXLSX(which){
   const sites=which==='all'?siteList():[siteById(which)];
   const label=(_repFrom||_repTo)?((_repFrom?fmtDate(_repFrom):'Start')+' to '+(_repTo?fmtDate(_repTo):'Today')):'All time';
-  exportReportXLSX(sites,_repFrom,_repTo,REP_NO_SETUP,label,('UrbanHaven_'+(which==='all'?'All_Sites':sites[0].name)+'_'+label).replace(/[^a-z0-9]+/gi,'_')+'.xlsx');
+  exportReportXLSX(sites,_repFrom,_repTo,REP_SETUP,label,('UrbanHaven_'+(which==='all'?'All_Sites':sites[0].name)+'_'+label).replace(/[^a-z0-9]+/gi,'_')+'.xlsx');
 }
 
 /* ---- boot ---- */
