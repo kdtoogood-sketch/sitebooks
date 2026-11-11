@@ -764,7 +764,7 @@ function viewHome(){
   </div>`;
   // who owes whom overall
   if(all.transfers.length){
-    h+=`<div class="sec-hdr">Pending settlement · all sites</div><div class="card">`+all.transfers.map(t=>`<div class="tr-row"><span><b>${esc(pname(t.from))}</b> pays <b>${esc(pname(t.to))}</b></span><span class="amt">${inr(t.amount)}</span></div>`).join('')+`</div>`;
+    h+=`<div class="sec-hdr">Pending settlement · all sites</div><div class="card">`+all.transfers.map(t=>`<div class="tr-row"><span><b>${esc(pname(t.from))}</b> pays <b>${esc(pname(t.to))}</b></span><span class="amt">${inr(t.amount)}</span></div><div style="text-align:right;margin:-4px 0 8px"><button class="mini-btn edit" onclick="openGlobalSettle('${t.from}','${t.to}')">🤝 Record payment</button></div>`).join('')+`</div>`;
   } else if(sites.some(s=>expensesOf(s.id).length||incomesOf(s.id).length)){
     h+=`<div class="card" style="text-align:center;color:var(--green);font-weight:700">✅ Everyone is settled up</div>`;
   }
@@ -999,6 +999,7 @@ function openExpenseForm(siteId,id,opt){
   const cats=categoryOptions();
   openModal(`<div class="modal-title">${e?'✏️ Edit Expense':'💸 Add Expense'}</div>
     <div class="site-line" id="f_siteline" style="display:${_multi.on?'none':'block'}">🏠 Site: <b>${esc(s.name)}</b>${opt.home&&!e?`<a onclick="quickAdd('exp')">change</a>`:''}</div>
+    ${e&&!e.cleanRef&&!e.payRef?_moveSiteHTML(siteId):''}
     ${inGroup?`<div class="card" style="background:var(--bluebg);color:var(--blue);font-size:12.5px;margin-bottom:10px">🔗 This bill is split across <b>${gm.length} sites</b>. Changes here update all of them. To change only this site's share, untick “Split this bill across sites”.</div>`:''}
     <div class="form-row"><div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="f_date" value="${e?.date||todayStr()}"></div><div class="form-group"><label class="form-label" id="f_amount_lbl">${_multi.on?'Total bill (₹) *':'Amount (₹) *'}</label><input type="number" step="0.01" class="form-input" id="f_amount" inputmode="decimal" value="${inGroup?formAmount:(e?.amount||'')}" oninput="onAmountInput()"></div></div>
     ${siteList().length>1?`<label class="chk" style="margin:0 0 8px"><input type="checkbox" id="f_multi" ${_multi.on?'checked':''} onchange="toggleMulti()"> 🔗 Split this bill across sites</label>
@@ -1125,18 +1126,22 @@ function saveExpense(siteId,id){
   const date=$('f_date').value; if(!date){toast('Pick a date');return;}
   const paidBy=readLines('pay',_payLines.length).filter(l=>l.amount>0);
   const v=validateLines(paidBy,amount,'Paid by'); if(!v.ok){toast(v.msg);return;}
+  const toSite=_moveTarget(siteId); const T=siteById(toSite);
+  if(toSite!==siteId){ const bad=_notPartners(T,paidBy.map(l=>l.pid)); if(bad){toast(bad);return;} }
   let split; if($('f_ov').checked){ const ids=s.partners.map(p=>p.pid); split=readSplit('ovs',ids); const vs=validateShares(split); if(!vs.ok){toast('Custom split: '+vs.msg);return;} split=split.filter(x=>x.pct>0); }
   const old=id?DB.expenses.find(x=>x.id===id):null;
   // `split` = explicit override (only when the box is ticked). `stampedSplit` = the site split in force TODAY,
   // frozen onto the entry so later edits to the site's percentages never rewrite this entry.
-  const rec={...(old||{id:uid()}),siteId,date,amount,category:$('f_cat').value.trim(),vendor:$('f_vendor').value.trim(),kind:$('f_kind').value,paidBy,note:$('f_note').value.trim(),
+  if(toSite!==siteId&&split){ const bad=_notPartners(T,split.map(x=>x.pid)); if(bad){toast('Custom split: '+bad);return;} }
+  const moved=toSite!==siteId;
+  const rec={...(old||{id:uid()}),siteId:toSite,date,amount,category:$('f_cat').value.trim(),vendor:$('f_vendor').value.trim(),kind:$('f_kind').value,paidBy,note:$('f_note').value.trim(),
     split:split||null,
-    stampedSplit:(old&&old.stampedSplit&&old.stampedSplit.length&&!$('f_ov').checked)?old.stampedSplit:s.expenseSplit.map(x=>({pid:x.pid,pct:x.pct})),
+    stampedSplit:(!moved&&old&&old.stampedSplit&&old.stampedSplit.length&&!$('f_ov').checked)?old.stampedSplit:T.expenseSplit.map(x=>({pid:x.pid,pct:x.pct})),
     receipt:_receipt||old?.receipt||''};
   if(old&&old.group){ rec.group=null; if(groupMembers(old.group.id).length>1) toast('This site’s share is now separate from the split bill'); }
   saveRecord('expenses',rec,ME.name); if(rec.receipt) setTimeout(sbDriveRun,8000); _receipt='';
-  logAction(ME.name,(old?'Edited':'Added')+' expense '+inr(toPaise(amount))+' — '+(rec.category||rec.note||''),siteId);
-  closeModal(); render(); toast(old?'Updated':'Expense saved');
+  logAction(ME.name,(moved?'Moved expense '+inr(toPaise(amount))+' from '+s.name+' to '+T.name:(old?'Edited':'Added')+' expense '+inr(toPaise(amount)))+' — '+(rec.category||rec.note||''),toSite);
+  closeModal(); render(); toast(moved?'Moved to '+T.name:old?'Updated':'Expense saved');
 }
 function removeEntry(kind,id){
   if(!confirm('Delete this entry? It will be removed from totals and logged.')) return;
@@ -1155,6 +1160,7 @@ function openIncomeForm(siteId,id,opt){
   const kind=e?.kind||'booking';
   openModal(`<div class="modal-title">${e?'✏️ Edit':'💰 Add'} Money Received</div>
     ${opt.home?`<div class="site-line">🏠 Site: <b>${esc(s.name)}</b>${!e?`<a onclick="quickAdd('inc')">change</a>`:''}</div>`:''}
+    ${e?_moveSiteHTML(siteId):''}
     <div class="form-group"><label class="form-label">What is it?</label><select class="form-select" id="f_ikind" onchange="onIncomeKind()">
       <option value="booking" ${kind==='booking'?'selected':''}>Booking / rental income</option>
       <option value="capital" ${kind==='capital'?'selected':''}>Partner capital (a partner handing money in)</option>
@@ -1177,13 +1183,84 @@ function saveIncome(siteId,id){
   const v=validateLines(receivedBy,amount,kind==='capital'?'Held by':'Received by'); if(!v.ok){toast(v.msg);return;}
   let contributedBy;
   if(kind==='capital'){ contributedBy=readLines('ctb',_contribLines.length).filter(l=>l.amount>0); const v2=validateLines(contributedBy,amount,'Contributed by'); if(!v2.ok){toast(v2.msg);return;} }
+  const toSite=_moveTarget(siteId); const moved=toSite!==siteId;
+  if(moved){ const bad=_notPartners(siteById(toSite),receivedBy.map(l=>l.pid).concat((contributedBy||[]).map(l=>l.pid))); if(bad){toast(bad);return;} }
   const old=id?DB.incomes.find(x=>x.id===id):null;
   const bk=kind==='booking'?readBkForm(amount):{gross:null,platformFee:null,tds:null};
   if(bk.gross!=null){ const chk=toPaise(bk.gross)-toPaise(bk.platformFee)-toPaise(bk.tds); if(chk<toPaise(amount)){ toast('Guest paid minus fee and TDS is less than the net amount — check the figures'); return; } }
-  const rec={...(old||{id:uid()}),siteId,date,amount,kind,source:kind==='booking'?$('f_source').value.trim():'',receivedBy,contributedBy,note:$('f_note').value.trim(),...bk};
+  const rec={...(old||{id:uid()}),siteId:toSite,date,amount,kind,source:kind==='booking'?$('f_source').value.trim():'',receivedBy,contributedBy,note:$('f_note').value.trim(),...bk};
   saveRecord('incomes',rec,ME.name);
-  logAction(ME.name,(old?'Edited':'Added')+' '+kind+' '+inr(toPaise(amount)),siteId);
-  closeModal(); render(); toast(old?'Updated':'Saved');
+  logAction(ME.name,moved?'Moved '+kind+' '+inr(toPaise(amount))+' from '+siteById(siteId).name+' to '+siteById(toSite).name+(rec.guestName?' ('+rec.guestName+')':''):(old?'Edited':'Added')+' '+kind+' '+inr(toPaise(amount)),toSite);
+  closeModal(); render(); toast(moved?'Moved to '+siteById(toSite).name:old?'Updated':'Saved');
+}
+
+/* ---- move an existing entry to another site (keeps its Airbnb link, so re-imports still skip it) ---- */
+function _moveSiteHTML(siteId){
+  const all=siteList(); if(all.length<2) return '';
+  return `<div class="form-group"><label class="form-label">Site</label><select class="form-select" id="f_movesite">${all.map(x=>`<option value="${x.id}" ${x.id===siteId?'selected':''}>${esc(x.name)}${x.id===siteId?' (now)':''}</option>`).join('')}</select><div class="muted" style="font-size:11.5px;margin-top:3px">Change it to move this entry to another site.</div></div>`;
+}
+function _moveTarget(siteId){ const el=$('f_movesite'); return el&&el.value&&siteById(el.value)?el.value:siteId; }
+function _notPartners(site,pids){ const ok=(site.partners||[]).map(p=>p.pid); const bad=[...new Set(pids)].find(p=>!ok.includes(p)); return bad?pname(bad)+' is not a partner in '+site.name:''; }
+
+/* ---- one partner payment for ALL sites: split across sites by what that pair owes on each ---- */
+let _gSet=null;
+function _pairOwed(from,to){
+  const out={};
+  siteList().forEach(s=>{ const res=computeSite(s,expensesOf(s.id),incomesOf(s.id),settlementsOf(s.id)); const nets={}; Object.values(res.partners).forEach(p=>nets[p.pid]=p.net);
+    const f=nets[from]||0, t=nets[to]||0;
+    const cap=(f<0&&t>0)?Math.min(-f,t):0; if(cap>0) out[s.id]=cap; });   // what the payer can pay the receiver directly on this site
+  return out;
+}
+function _pairTotal(from,to){ return ((overallForRange('','').transfers)||[]).filter(x=>x.from===from&&x.to===to).reduce((a,x)=>a+x.amount,0); }
+function _allocSettle(amountP,weights){
+  const ks=Object.keys(weights); const W=ks.reduce((a,k)=>a+weights[k],0); const out={}; if(!W||!amountP) return out;
+  // up to what is owed on each site, in proportion; anything above the total owed goes to the site owed most
+  const pay=Math.min(amountP,W); let used=0; const rem=[];
+  ks.forEach(k=>{ const raw=pay*weights[k]/W; const f=Math.floor(raw); out[k]=f; used+=f; rem.push([raw-f,k]); });
+  rem.sort((a,b)=>b[0]-a[0]); for(let i=0;i<pay-used;i++) out[rem[i%rem.length][1]]++;
+  if(amountP>W){ const top=ks.slice().sort((a,b)=>weights[b]-weights[a])[0]; out[top]+=amountP-W; }
+  return out;
+}
+function openGlobalSettle(from,to){
+  const ps=partnerList(); if(ps.length<2) return;
+  const all=overallForRange('',''); const t=(all.transfers||[])[0];
+  _gSet={from:from||(t&&t.from)||ps[0].id,to:to||(t&&t.to)||ps[1].id,date:todayStr(),amount:'',note:''};
+  gSetRender();
+}
+function gSetRender(){
+  const G=_gSet; const ps=partnerList();
+  const owed=_pairOwed(G.from,G.to); const totOwed=_pairTotal(G.from,G.to)||Object.values(owed).reduce((a,b)=>a+b,0);
+  const alloc=_allocSettle(toPaise(G.amount||0),owed);
+  openModal(`<div class="modal-title">🤝 Record payment — all sites</div>
+    <div class="muted" style="margin-bottom:10px">One payment between partners. It is split across the sites by what is owed on each, and shows on every site's Settle tab.</div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Paid by</label><select class="form-select" id="gs_from" onchange="_gSet.from=this.value;gSetKeep();gSetRender()">${ps.map(p=>`<option value="${p.id}" ${p.id===G.from?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Paid to</label><select class="form-select" id="gs_to" onchange="_gSet.to=this.value;gSetKeep();gSetRender()">${ps.map(p=>`<option value="${p.id}" ${p.id===G.to?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div></div>
+    <div class="card" style="font-size:13px;margin-bottom:10px">${totOwed?`${esc(pname(G.from))} owes ${esc(pname(G.to))} <b>${inr(totOwed)}</b> across ${Object.keys(owed).length} site${Object.keys(owed).length!==1?'s':''}`:`${esc(pname(G.from))} doesn't owe ${esc(pname(G.to))} anything right now`}</div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="gs_date" value="${G.date}"></div>
+      <div class="form-group"><label class="form-label">Amount (₹) *</label><input type="number" step="0.01" inputmode="decimal" class="form-input" id="gs_amount" value="${esc(G.amount)}" onchange="gSetKeep();gSetRender()"></div></div>
+    ${totOwed?`<button class="mini-btn edit" style="margin:-4px 0 10px" onclick="_gSet.amount=${totOwed/100};gSetKeep(true);gSetRender()">Use full amount ${inr(totOwed)}</button>`:''}
+    <div class="form-group"><label class="form-label">Note</label><input class="form-input" id="gs_note" value="${esc(G.note)}" placeholder="UPI, cash, cheque…"></div>
+    ${Object.keys(alloc).length?`<div class="form-label">Goes to these sites</div><div class="card" style="padding:4px 12px">${Object.entries(alloc).map(([sid,p])=>`<div class="tr-row"><span>${esc((siteById(sid)||{}).name||'?')}</span><span class="amt">${inr(p)}</span></div>`).join('')}</div>`:''}
+    ${toPaise(G.amount||0)>totOwed&&totOwed?`<div class="muted" style="color:var(--red);margin-bottom:8px">More than is owed — the extra ${inr(toPaise(G.amount)-totOwed)} goes to the site owed most.</div>`:''}
+    <button class="submit-btn" onclick="gSetSave()">Save payment</button><button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
+}
+function gSetKeep(keepAmt){ if(!_gSet)return; const d=$('gs_date'),a=$('gs_amount'),n=$('gs_note'); if(d)_gSet.date=d.value; if(a&&!keepAmt)_gSet.amount=a.value; if(n)_gSet.note=n.value; }
+function gSetSave(){
+  gSetKeep(); const G=_gSet;
+  if(G.from===G.to){toast('Payer and receiver must be different');return;}
+  const amt=Number(G.amount||0); if(!(amt>0)){toast('Enter the amount');return;} if(!G.date){toast('Pick the date');return;}
+  const owed=_pairOwed(G.from,G.to);
+  let alloc=_allocSettle(toPaise(amt),owed);
+  if(!Object.keys(alloc).length){ // nothing owed between them: put it on the first active site both are partners in
+    const s=siteList().find(x=>x.status!=='Closed'&&!_notPartners(x,[G.from,G.to])); if(!s){toast('No site has both of them as partners');return;}
+    if(!confirm(pname(G.from)+' does not owe '+pname(G.to)+' anything right now. Record it anyway on '+s.name+'?'))return;
+    alloc={[s.id]:toPaise(amt)};
+  }
+  const gid=uid(); const parts=Object.entries(alloc);
+  parts.forEach(([sid,p])=>saveRecord('settlements',{id:uid(),siteId:sid,from:G.from,to:G.to,amount:p/100,date:G.date,
+    note:(G.note?G.note+' · ':'')+(parts.length>1?'part of '+inr(toPaise(amt))+' payment':''),group:{id:gid,total:amt,n:parts.length}},ME.name));
+  logAction(ME.name,'Settlement '+pname(G.from)+' → '+pname(G.to)+' '+inr(toPaise(amt))+(G.note?' ('+G.note+')':'')+' — '+parts.map(([sid,p])=>siteById(sid).name+' '+inr(p)).join(', '));
+  closeModal(); render(); toast('Payment recorded on '+parts.length+' site'+(parts.length!==1?'s':''));
 }
 
 /* ---- settle tab ---- */
