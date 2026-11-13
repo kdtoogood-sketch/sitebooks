@@ -2941,7 +2941,7 @@ function clReconcile(){
 }
 
 /* ---------- the entry form (Preeti's whole screen; partners get it in a pop-up) ---------- */
-function clNewForm(){ return {id:'',date:todayStr(),units:[],by:'',company:((CL.cfg&&CL.cfg.companies)||['Snabbit'])[0],amount:'',paidBy:(CL.cfg&&CL.cfg.defaultPayer)||''}; }
+function clNewForm(){ return {id:'',date:todayStr(),units:[],by:'',company:((CL.cfg&&CL.cfg.companies)||['Snabbit'])[0],amount:'',paidBy:(CL.cfg&&CL.cfg.defaultPayer)||'',preeti:isCleaner()}; }
 function clFormHTML(){
   const f=CLF, cfg=CL.cfg; const care=(cfg.caretakers||[]).filter(c=>c.active!==false||c.id===f.by);
   const chip=(on,cls,click,label)=>`<span class="pchip ${on?'on':''} ${cls}" onclick="${click}">${on?'✓ ':''}${label}</span>`;
@@ -2955,7 +2955,8 @@ function clFormHTML(){
    <div class="chips" style="margin-bottom:6px">${care.map(c=>chip(f.by===c.id,'',`clSet('by','${c.id}')`,esc(c.name))).join('')}${chip(f.by==='ext','',`clSet('by','ext')`,'Snabbit / UC')}</div>
    ${f.by==='ext'?`<div class="form-label" style="margin-top:8px">Company</div><div class="chips" style="margin-bottom:10px">${(cfg.companies||[]).map(c=>chip(f.company===c,'',`clSet('company',${JSON.stringify(c).replace(/"/g,'&quot;')})`,esc(c))).join('')}</div>
      <div class="form-group"><label class="form-label">Amount paid (₹)</label><input type="number" step="0.01" inputmode="decimal" class="form-input" id="cl_amt" value="${esc(f.amount)}" oninput="CLF.amount=this.value;clNote()"></div>
-     <div class="form-label">Paid by</div><div class="chips" style="margin-bottom:6px">${(cfg.partners||[]).map(p=>chip(f.paidBy===p.id,'',`clSet('paidBy','${p.id}')`,esc(p.name))).join('')}</div>`:''}
+     <div class="form-label">Who paid Snabbit?</div><div class="chips" style="margin-bottom:10px">${chip(f.preeti,'',`clSet('preeti',true)`,'Preeti — to be paid back')}${chip(!f.preeti,'',`clSet('preeti',false)`,'A partner paid directly')}</div>
+     <div class="form-label">${f.preeti?'Whose money pays Preeti back (expense goes to)':'Paid by'}</div><div class="chips" style="margin-bottom:6px">${(cfg.partners||[]).map(p=>chip(f.paidBy===p.id,'',`clSet('paidBy','${p.id}')`,esc(p.name))).join('')}</div>`:''}
    <div id="cl_note">${note}</div>
    <button class="submit-btn" style="background:var(--green)" onclick="clSave()">${f.id?'Update':'Save'}</button>
    ${f.id?`<button class="cancel-btn danger" onclick="clDelete('${f.id}')">Delete this entry</button>`:''}
@@ -2975,7 +2976,7 @@ async function clSave(){
   if(f.by==='ext'){
     const a=Number($('cl_amt')?$('cl_amt').value:f.amount); if(!(a>0)){toast('Enter the amount paid');return;}
     if(!f.paidBy){toast('Choose who paid');return;}
-    Object.assign(rec,{byName:f.company,company:f.company,amount:a,paidBy:f.paidBy});
+    Object.assign(rec,{byName:f.company,company:f.company,amount:a,paidBy:f.paidBy,preeti:!!f.preeti});
   }else{
     const c=clCare(f.by); if(!c){toast('Caretaker not found');return;}
     const old=f.id?CL.list.find(x=>x.id===f.id):null;
@@ -2986,7 +2987,7 @@ async function clSave(){
   }
   const old=f.id?CL.list.find(x=>x.id===f.id):null;
   const full={...(old||{id:'c'+uid(),createdBy:ME.name,createdAt:Date.now()}),...rec,updatedAt:Date.now(),updatedBy:ME.name,deleted:false};
-  if(full.by!=='ext'){ delete full.company; delete full.amount; delete full.paidBy; }
+  if(full.by!=='ext'){ delete full.company; delete full.amount; delete full.paidBy; delete full.preeti; }
   const btn=document.querySelector('#cl_form .submit-btn'); if(btn){btn.disabled=true;btn.textContent='Saving…';}
   try{ await clPut(CL_COLL,full); }
   catch(e){ if(btn){btn.disabled=false;btn.textContent=f.id?'Update':'Save';} toast(e&&e.status===403?'⛔ No permission — ask Kanwar to update the Firebase rule':'📶 Not saved — check internet and try again',4000); return; }
@@ -3008,13 +3009,13 @@ function clEntryRow(e,canEdit){
   const ext=e.by==='ext';
   return `<div class="entry" ${canEdit?`onclick="clEdit('${e.id}')"`:''} style="${canEdit?'':'cursor:default'}"><div class="entry-l"><div class="entry-t">${esc(e.byName||'')}</div>
     <div class="entry-s">${fmtDate(e.date)} · ${esc((e.units||[]).map(u=>clUnitName(u,e)).join(', '))}${ext?' · paid by '+esc(clPartnerName(e.paidBy)):''}${e.createdBy&&!isCleaner()?' · by '+esc(e.createdBy):''}</div>
-    ${e._err?`<div class="entry-s" style="color:var(--red);font-weight:700">⚠️ ${esc(e._err)}</div>`:''}${e.payId?'<div class="entry-s" style="color:var(--green);font-weight:700">✓ Paid</div>':''}</div>
+    ${e._err?`<div class="entry-s" style="color:var(--red);font-weight:700">⚠️ ${esc(e._err)}</div>`:''}${e.payId?'<div class="entry-s" style="color:var(--green);font-weight:700">✓ Paid</div>':''}${clCashTag(e)}</div>
     <div class="entry-a ${ext?'b':'g'}">${inr(clCost(e))}${canEdit?' ✏️':''}</div></div>`;
 }
 function clAddOpen(){ CLF=clNewForm(); openModal(`<div class="modal-title">🧹 Mark cleaning</div><div id="cl_form">${clFormHTML()}</div>`); }
 function clEdit(id){
   const e=CL.list.find(x=>x.id===id); if(!e)return;
-  CLF={id:e.id,date:e.date,units:(e.units||[]).slice(),by:e.by,company:e.company||((CL.cfg.companies||[])[0]),amount:e.amount!=null?String(e.amount):'',paidBy:e.paidBy||CL.cfg.defaultPayer||''};
+  CLF={id:e.id,date:e.date,units:(e.units||[]).slice(),by:e.by,company:e.company||((CL.cfg.companies||[])[0]),amount:e.amount!=null?String(e.amount):'',paidBy:e.paidBy||CL.cfg.defaultPayer||'',preeti:!!e.preeti};
   if(isCleaner()){ render(); $('scroll').scrollTop=0; }
   else openModal(`<div class="modal-title">🧹 ${e.id?'Edit':'Mark'} cleaning</div><div id="cl_form">${clFormHTML()}</div>`);
 }
@@ -3030,6 +3031,92 @@ match /sbclean_cfg/{doc} {
     ['kd@kdcinfra.in','baljot@kdcinfra.in','nikshit@kdcinfra.in','preeti@kdcinfra.in'];
 }</pre><button class="submit-btn" onclick="CL.loaded=false;render();clLoad().then(render)">Try again</button></div>`;
 }
+/* ---------- Preeti's cash book ----------
+   Snabbit / UC cleanings Preeti paid from her own pocket (entry.preeti=true) are owed to her.
+   Money a partner gives her is a 'cash' record in the same sbclean collection.
+   Payments are matched to her entries oldest first, so each entry shows ✅ paid back / ⏳ not yet.
+   This is only a record of Preeti's money — the cleaning expense itself is booked to the partner chosen in "Whose money". */
+function clCashBook(){
+  const by=(a,b)=>a.date.localeCompare(b.date)||(a.createdAt||0)-(b.createdAt||0);
+  const owed=CL.list.filter(e=>e.kind==='clean'&&!e.deleted&&e.by==='ext'&&e.preeti).sort(by);
+  const got=CL.list.filter(e=>e.kind==='cash'&&!e.deleted).sort(by);
+  const gotTot=got.reduce((a,x)=>a+toPaise(x.amount),0), owedTot=owed.reduce((a,e)=>a+toPaise(e.amount),0);
+  let pool=gotTot; const st={};
+  owed.forEach(e=>{ const a=toPaise(e.amount); const cov=Math.min(a,Math.max(0,pool)); pool-=cov; st[e.id]={a,cov,left:a-cov,s:cov>=a?'paid':cov>0?'part':'due'}; });
+  return {owed,got,gotTot,owedTot,bal:owedTot-gotTot,st,dueN:owed.filter(e=>st[e.id].s!=='paid').length};
+}
+function clCashTag(e,B){
+  if(!e.preeti||e.by!=='ext') return '';
+  const s=(B||clCashBook()).st[e.id]; if(!s) return '';
+  return s.s==='paid'?'<div class="entry-s" style="color:var(--green);font-weight:700">✅ Paid back to Preeti</div>':s.s==='part'?`<div class="entry-s" style="color:#c0640c;font-weight:700">◐ ${inr(s.left)} still to pay Preeti</div>`:'<div class="entry-s" style="color:#c0640c;font-weight:700">⏳ Not paid back to Preeti yet</div>';
+}
+function clCashCardHTML(m){
+  const B=clCashBook(); if(!B.owed.length&&!B.got.length&&!isCleaner()) return '';
+  const msg=B.bal>0?`Preeti is owed <b>${inr(B.bal)}</b>`:B.bal<0?`Preeti holds <b>${inr(-B.bal)}</b> extra (advance)`:'All settled';
+  const mo=B.owed.filter(e=>e.date.slice(0,7)===m), mg=B.got.filter(x=>x.date.slice(0,7)===m);
+  const lines=[...mo.map(e=>({d:e.date,c:e.createdAt,h:`<div class="entry" onclick="clEdit('${e.id}')"><div class="entry-l"><div class="entry-t">${esc(e.company||'Snabbit')} · paid by Preeti</div><div class="entry-s">${fmtDate(e.date)} · ${esc((e.units||[]).map(u=>clUnitName(u,e)).join(', '))}</div>${clCashTag(e,B)}</div><div class="entry-a b">${inr(toPaise(e.amount))}</div></div>`})),
+    ...mg.map(x=>({d:x.date,c:x.createdAt,h:`<div class="entry" onclick="clCashOpen('${x.id}')"><div class="entry-l"><div class="entry-t">💵 Received from ${esc(clPartnerName(x.from))}</div><div class="entry-s">${fmtDate(x.date)} · ${esc(x.mode||'Cash')}${x.note?' · '+esc(x.note):''}${x.createdBy?' · added by '+esc(x.createdBy):''}</div></div><div class="entry-a g">${inr(toPaise(x.amount))}</div></div>`}))]
+    .sort((a,b)=>b.d.localeCompare(a.d)||(b.c||0)-(a.c||0));
+  const older=B.owed.filter(e=>e.date.slice(0,7)<m&&B.st[e.id].s!=='paid').length;
+  return `<div class="sec-hdr" style="margin-top:14px">💰 Preeti's cash</div>
+   <div class="card" style="border-color:${B.bal>0?'#f6c7a6':'#bfe6cc'};background:${B.bal>0?'#fff4ec':'#f3fbf6'}">
+     <div style="font-size:16px;font-weight:800">${msg}</div>
+     <div class="muted" style="margin-top:4px">Paid by Preeti ${inr(B.owedTot)} · received ${inr(B.gotTot)} (all time)${B.dueN?' · '+B.dueN+' entr'+(B.dueN>1?'ies':'y')+' not paid back':''}</div>
+     <div class="btn-row" style="margin-top:10px"><button class="site-btn pay" onclick="clCashOpen()">＋ ${isCleaner()?'Money received':'Gave Preeti money'}</button><button class="site-btn share" onclick="clCashShare('${m}')">📤 ${monthLabel(m)}</button></div></div>
+   ${lines.length?lines.map(x=>x.h).join(''):`<div class="muted" style="padding:4px 2px">Nothing in ${monthLabel(m)}.</div>`}
+   ${older?`<div class="muted" style="padding:6px 2px;color:#c0640c">⏳ ${older} entr${older>1?'ies':'y'} from earlier months not paid back yet — use ‹ to see them.</div>`:''}`;
+}
+function clCashOpen(id){
+  const x=id?CL.list.find(r=>r.id===id):null; const cfg=CL.cfg;
+  const from=x?x.from:(cfg.defaultPayer||((cfg.partners||[])[0]||{}).id);
+  window._clCash={id:x?x.id:'',from,mode:x?x.mode||'Cash':'Cash'};
+  const chip=(on,click,label)=>`<span class="pchip ${on?'on':''}" onclick="${click}">${on?'✓ ':''}${label}</span>`;
+  const draw=()=>`<div class="modal-title">💵 ${x?'Edit':isCleaner()?'Money received':'Gave Preeti money'}</div>
+    <div class="form-row"><div class="form-group"><label class="form-label">Amount (₹)</label><input type="number" step="0.01" inputmode="decimal" class="form-input" id="kc_amt" value="${x?x.amount:''}"></div>
+      <div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="kc_date" value="${x?x.date:todayStr()}" max="${todayStr()}"></div></div>
+    <div class="form-label">From</div><div class="chips" id="kc_from" style="margin-bottom:10px">${(cfg.partners||[]).map(p=>chip(_clCash.from===p.id,`_clCash.from='${p.id}';clCashChips()`,esc(p.name))).join('')}</div>
+    <div class="form-label">How</div><div class="chips" id="kc_mode" style="margin-bottom:10px">${['Cash','UPI'].map(m=>chip(_clCash.mode===m,`_clCash.mode='${m}';clCashChips()`,m)).join('')}</div>
+    <div class="form-group"><label class="form-label">Note</label><input class="form-input" id="kc_note" value="${esc(x?x.note||'':'')}" placeholder="optional"></div>
+    <button class="submit-btn" style="background:var(--green)" onclick="clCashSave()">${x?'Update':'Save'}</button>
+    ${x?`<button class="cancel-btn danger" onclick="clCashDelete('${x.id}')">Delete</button>`:''}<button class="cancel-btn" onclick="closeModal()">Cancel</button>`;
+  window.clCashChips=()=>{ const a=$('kc_amt').value,d=$('kc_date').value,n=$('kc_note').value; openModal(draw()); $('kc_amt').value=a; $('kc_date').value=d; $('kc_note').value=n; };
+  openModal(draw());
+}
+async function clCashSave(){
+  const c=window._clCash; const a=Number($('kc_amt').value), d=$('kc_date').value;
+  if(!(a>0)){toast('Enter the amount');return;} if(!d){toast('Pick the date');return;} if(d>todayStr()){toast('Date cannot be in the future');return;}
+  if(!c.from){toast('Choose who gave the money');return;}
+  const old=c.id?CL.list.find(x=>x.id===c.id):null;
+  const full={...(old||{id:'k'+uid(),createdBy:ME.name,createdAt:Date.now()}),kind:'cash',amount:a,date:d,from:c.from,mode:c.mode,note:$('kc_note').value.trim(),updatedAt:Date.now(),updatedBy:ME.name,deleted:false};
+  try{ await clPut(CL_COLL,full); }catch(e){ toast(e&&e.status===403?'⛔ No permission':'📶 Not saved — check internet and try again',4000); return; }
+  const i=CL.list.findIndex(x=>x.id===full.id); if(i>=0)CL.list[i]=full; else CL.list.push(full);
+  if(!isCleaner()) logAction(ME.name,`Preeti's cash: ${old?'edited':'added'} ${inr(toPaise(a))} from ${clPartnerName(c.from)} on ${fmtDate(d)}`);
+  closeModal(); render(); toast(old?'✓ Updated':'✓ Saved');
+}
+async function clCashDelete(id){
+  const x=CL.list.find(r=>r.id===id); if(!x) return;
+  if(!confirm('Delete this payment of '+inr(toPaise(x.amount))+' ('+fmtDate(x.date)+')?')) return;
+  const full={...x,deleted:true,updatedAt:Date.now(),updatedBy:ME.name};
+  try{ await clPut(CL_COLL,full); }catch(e){ toast('📶 Not deleted — check internet'); return; }
+  Object.assign(x,full); if(!isCleaner()) logAction(ME.name,"Preeti's cash: deleted "+inr(toPaise(x.amount))+' on '+fmtDate(x.date));
+  closeModal(); render(); toast('Deleted');
+}
+function clCashText(m){
+  const B=clCashBook(); const mo=B.owed.filter(e=>e.date.slice(0,7)===m), mg=B.got.filter(x=>x.date.slice(0,7)===m);
+  let t=`*Preeti's cleaning cash — ${monthLabel(m)}*\n\n`;
+  if(mo.length){ t+='Paid by Preeti:\n'+mo.map(e=>{const s=B.st[e.id];return `• ${fmtDate(e.date)} ${e.company||'Snabbit'} (${(e.units||[]).map(u=>clUnitName(u,e)).join(', ')}) ${inr(s.a)} ${s.s==='paid'?'✅':s.s==='part'?'◐ '+inr(s.left)+' due':'⏳'}`;}).join('\n')+`\nTotal ${inr(mo.reduce((a,e)=>a+toPaise(e.amount),0))}\n\n`; }
+  if(mg.length){ t+='Received:\n'+mg.map(x=>`• ${fmtDate(x.date)} ${inr(toPaise(x.amount))} from ${clPartnerName(x.from)} (${x.mode||'Cash'})`).join('\n')+`\nTotal ${inr(mg.reduce((a,x)=>a+toPaise(x.amount),0))}\n\n`; }
+  t+=B.bal>0?`*Balance: Preeti is owed ${inr(B.bal)}*`:B.bal<0?`*Balance: Preeti holds ${inr(-B.bal)} extra*`:'*Balance: all settled*';
+  return t;
+}
+function clCashShare(m){ window.open('https://wa.me/?text='+encodeURIComponent(clCashText(m)),'_blank'); }
+/* Preeti's month summary */
+function clMonthSummaryHTML(m){
+  const D=clMonthData(m);
+  const parts=D.care.filter(c=>c.n).map(c=>`${esc(c.name)} <b>${c.n}</b>`);
+  if(D.ext.length) parts.push(`Snabbit/UC <b>${D.ext.length}</b> (${inr(D.extTot)})`);
+  return `<div class="card" style="font-size:13px">${parts.length?parts.join(' · '):'Nothing marked in '+monthLabel(m)+' yet.'}</div>`;
+}
 /* ---------- Preeti's screen ---------- */
 function viewCleaner(){
   if(!CL.loaded) return `<div class="empty"><div class="emo">🧹</div><p>Loading…</p></div>`;
@@ -3037,13 +3124,16 @@ function viewCleaner(){
   if(CL.err) return `<div class="empty"><div class="emo">📶</div><p>Couldn't load.<br><small style="color:#999">${esc(CL.errMsg||'')}</small></p><button class="submit-btn" style="max-width:200px;margin:12px auto" onclick="CL.loaded=false;render();clLoad().then(render)">Try again</button></div>`;
   if(!CL.cfg) return `<div class="empty"><div class="emo">⚙️</div><p>Not set up yet — ask Kanwar to open SiteBooks once.</p></div>`;
   if(!CLF) CLF=clNewForm();
-  const from=(()=>{const d=new Date();d.setDate(d.getDate()-7);return d.toISOString().slice(0,10);})();
-  const recent=CL.list.filter(e=>e.kind==='clean'&&!e.deleted&&e.date>=from).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
-  const today=todayStr();
+  if(!CL.month) CL.month=monthStr();
+  const m=CL.month;
+  const list=CL.list.filter(e=>e.kind==='clean'&&!e.deleted&&String(e.date).slice(0,7)===m).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
   return `${CLF.id?'<div class="card" style="background:#fff4ec;border-color:#f6c7a6;font-weight:800">✏️ Editing an entry</div>':''}<div id="cl_form">${clFormHTML()}</div>
-   <div class="sec-hdr" style="margin-top:18px">Last 7 days</div>
-   ${recent.length?recent.map(e=>clEntryRow(e,!e.payId&&((e.createdAt&&new Date(e.createdAt).toISOString().slice(0,10)===today)||e.date===today))).join(''):'<div class="muted" style="padding:6px 2px">Nothing marked yet.</div>'}
-   <div class="muted" style="text-align:center;margin:14px 0 4px">You can correct today's entries — tap ✏️</div>`;
+   <div class="chips" style="margin:18px 0 10px;flex-wrap:nowrap"><span class="pchip" onclick="clShiftMonth(-1)">‹</span><span class="pchip on" style="flex:1;text-align:center">${monthLabel(m)}</span><span class="pchip" onclick="clShiftMonth(1)">›</span></div>
+   ${clMonthSummaryHTML(m)}
+   ${clCashCardHTML(m)}
+   <div class="sec-hdr" style="margin-top:14px">All cleanings · ${monthLabel(m)} (${list.length})</div>
+   ${list.length?list.map(e=>clEntryRow(e,!e.payId)).join(''):'<div class="muted" style="padding:6px 2px">Nothing marked in '+monthLabel(m)+'.</div>'}
+   <div class="muted" style="text-align:center;margin:14px 0 4px">Tap ✏️ to correct an entry. Entries already paid to a caretaker are locked.</div>`;
 }
 /* ---------- partners: Cleaning tab ---------- */
 function clMonthData(m){
@@ -3074,6 +3164,7 @@ function viewClean(){
   errs.forEach(e=>h+=`<div class="card" style="border-color:#f3c0b8;background:#fff6f4;font-size:13px">⚠️ ${esc(e.byName)} ${inr(clCost(e))} on ${fmtDate(e.date)} not added to expenses: ${esc(e._err)}</div>`);
   h+=`<div class="hero small"><div class="hero-lbl">${monthLabel(CL.month)} · cleaning cost</div><div class="hero-val">${inr(careTot+D.extTot)}</div><div class="hero-sub">Caretakers ${inr(careTot)} · Snabbit/UC ${inr(D.extTot)}</div></div>`;
   h+=`<button class="submit-btn" style="background:var(--green);margin-bottom:12px" onclick="clAddOpen()">＋ Mark cleaning</button>`;
+  h+=clCashCardHTML(CL.month);
   if(!D.care.length&&!D.ext.length) h+=`<div class="empty"><div class="emo">🧹</div><p>Nothing marked for ${monthLabel(CL.month)}.</p></div>`;
   D.care.forEach(c=>{
     const due=c.amt-c.paid; const uTxt=Object.entries(c.units).map(([u,n])=>esc(clUnitName(u))+' ×'+n).join(' · ');
