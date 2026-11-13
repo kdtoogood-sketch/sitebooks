@@ -3051,7 +3051,7 @@ function clCashTag(e,B){
   return s.s==='paid'?'<div class="entry-s" style="color:var(--green);font-weight:700">✅ Paid back to Preeti</div>':s.s==='part'?`<div class="entry-s" style="color:#c0640c;font-weight:700">◐ ${inr(s.left)} still to pay Preeti</div>`:'<div class="entry-s" style="color:#c0640c;font-weight:700">⏳ Not paid back to Preeti yet</div>';
 }
 function clCashCardHTML(m){
-  const B=clCashBook(); if(!B.owed.length&&!B.got.length&&!isCleaner()) return '';
+  const B=clCashBook();
   const msg=B.bal>0?`Preeti is owed <b>${inr(B.bal)}</b>`:B.bal<0?`Preeti holds <b>${inr(-B.bal)}</b> extra (advance)`:'All settled';
   const mo=B.owed.filter(e=>e.date.slice(0,7)===m), mg=B.got.filter(x=>x.date.slice(0,7)===m);
   const lines=[...mo.map(e=>({d:e.date,c:e.createdAt,h:`<div class="entry" onclick="clEdit('${e.id}')"><div class="entry-l"><div class="entry-t">${esc(e.company||'Snabbit')} · paid by Preeti</div><div class="entry-s">${fmtDate(e.date)} · ${esc((e.units||[]).map(u=>clUnitName(u,e)).join(', '))}</div>${clCashTag(e,B)}</div><div class="entry-a b">${inr(toPaise(e.amount))}</div></div>`})),
