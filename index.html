@@ -102,6 +102,16 @@ img.rc{max-width:100%;max-height:150px;border-radius:10px;margin-top:8px;border:
 /* quick add + split across sites */
 .qa-row{display:flex;gap:8px;margin:0 0 8px}.qa-row button{flex:1;padding:13px 6px;border-radius:14px;font-weight:900;font-size:15px;border:0;cursor:pointer;font-family:inherit}
 .qa-exp{background:#fdecea;color:#c0392b}.qa-inc{background:#e8f7ee;color:#1e8449}.qa-bk{background:#fdf0e3;color:#c0640c}
+.oc-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}.oc-hd>b{font-size:16px}
+.oc-mn{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;white-space:nowrap}.oc-mn .icon-btn{width:30px;height:30px}
+.oc-tot{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}.oc-tot>div{background:var(--card2);border-radius:10px;padding:7px 8px}.oc-tot small{display:block;font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px}.oc-tot b{font-size:16px}
+.oc-row{display:grid;grid-template-columns:64px 1fr 46px;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer}
+.oc-nm{font-size:12.5px;font-weight:800;line-height:1.2;overflow-wrap:anywhere}
+.oc-strip{display:grid;gap:1.5px;height:26px}.oc-strip i{display:block;border-radius:2px}
+.oc-fr{background:#eef0f3}.oc-fr.we{background:#e0e3e8}.oc-na{background:repeating-linear-gradient(45deg,#f6f6f7 0 3px,#e6e7eb 3px 5px)}
+.oc-st{text-align:right;line-height:1.15}.oc-st b{display:block;font-size:14px}.oc-st span{font-size:10.5px;color:var(--muted)}
+.oc-days{cursor:default;margin:-4px 0 6px}.oc-days .oc-strip{height:auto;font-size:9px;color:var(--muted)}.oc-days .oc-strip span{text-align:left;white-space:nowrap}
+.cal-lg i.oc-fr,.cal-lg i.oc-na{border:0}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:8px}.cal-h{text-align:center;font-size:10px;color:var(--muted);font-weight:700}
 .cal-d{text-align:center;padding:8px 0;border-radius:8px;font-size:12px;font-weight:700;background:var(--card2);color:var(--text2);cursor:pointer;border:2px solid transparent}
 .cal-d.on{color:#fff}.cal-d.clash{border-color:#c0392b;box-shadow:0 0 0 1px #fff inset}.cal-d.today{outline:2px solid var(--text);outline-offset:-2px}
@@ -777,10 +787,64 @@ function viewHome(){
   h=backupNudgeHTML()+plHomeStrip()+h;
   h+=`<div class="qa-row"><button class="qa-exp" onclick="quickAdd('exp')">＋ Expense</button><button class="qa-inc" onclick="quickAdd('inc')">＋ Income</button><button class="qa-bk" onclick="quickBooking()">＋ Booking</button></div>`+pendingBookingsCardHTML();
   h+=`<button class="cancel-btn" style="margin:0 0 4px;background:var(--bluebg);color:var(--blue);border-color:var(--blue)" onclick="openCsvImport()">⬆️ Import Airbnb CSV</button>`;
+  h+=occupancyCardHTML(m||monthStr());
   h+=`<div class="sec-hdr">Sites${m?' · '+monthLabel(m):' · all time'} <button class="add-btn" onclick="openAddSite()">+ Add</button></div>`;
   const allBy={}; allP.per.forEach(({site,res})=>allBy[site.id]=res);
   h+=mon.per.map(({site,res})=>siteCard(site,res,{month:m,allTime:m?allBy[site.id]:null})).join('');
   return h;
+}
+/* ════════════ HOME: OCCUPANCY ════════════
+   One strip per site, one bar per night of the month. Reads the same stays as each site's Calendar tab
+   (Airbnb CSV imports, direct income with dates, offline bookings). Display only — nothing is saved. */
+function occupancyData(m){
+  const [y,mo]=m.split('-').map(Number), days=new Date(y,mo,0).getDate(), mEnd=m+'-'+String(days).padStart(2,'0');
+  const rows=[];
+  siteList().forEach(s=>{
+    const stays=siteStays(s.id), night={};
+    stays.forEach(st=>{ for(let d=st.from; d<st.to; d=addDays(d,1)){ if(d>mEnd) break; if(d.slice(0,7)===m)(night[d]=night[d]||[]).push(st); } });
+    const startDay=(s.startDate&&s.startDate.slice(0,7)===m)?Number(s.startDate.slice(8,10)):(s.startDate&&s.startDate>mEnd?days+1:1);
+    const booked=Object.keys(night).length;
+    if(startDay>days&&!booked) return;                                   // site not ours yet this month
+    if(s.status==='Closed'&&!booked) return;                             // closed and nothing that month
+    rows.push({s,night,startDay,booked,avail:Math.max(booked,days-startDay+1)});
+  });
+  return {m,days,rows,booked:rows.reduce((a,r)=>a+r.booked,0),avail:rows.reduce((a,r)=>a+r.avail,0)};
+}
+const OCC_COL={airbnb:'#ff5a5f',direct:'#1e8449',offline:'#2b6ef0',pending:'#e67e22'};
+function occupancyCardHTML(m){
+  const D=occupancyData(m); if(!D.rows.length) return '';
+  const pc=(b,a)=>a?Math.round(b/a*100):0, pcol=p=>p>=70?'var(--green)':p>=50?'#d97706':'var(--red)';
+  const first=(new Date(Number(m.slice(0,4)),Number(m.slice(5,7))-1,1).getDay()+6)%7;
+  const nums=Array.from({length:D.days},(_,i)=>i+1).map(d=>`<span>${[1,5,10,15,20,25,D.days].includes(d)?d:''}</span>`).join('');
+  const rows=D.rows.map(r=>{
+    const cells=Array.from({length:D.days},(_,i)=>{ const d=i+1, ds=m+'-'+String(d).padStart(2,'0'), st=r.night[ds], we=(first+i)%7>=5;
+      if(d<r.startDay&&!st) return `<i class="oc-na"></i>`;
+      if(st) return `<i style="background:${OCC_COL[st[0].kind]||OCC_COL.direct}" onclick="event.stopPropagation();occDay('${r.s.id}','${ds}')"></i>`;
+      return `<i class="oc-fr${we?' we':''}"></i>`; }).join('');
+    const p=pc(r.booked,r.avail);
+    return `<div class="oc-row" onclick="openSiteMonth('${r.s.id}','${m}','cal')"><div class="oc-nm">${esc(r.s.name)}</div><div class="oc-strip" style="grid-template-columns:repeat(${D.days},1fr)">${cells}</div><div class="oc-st"><b style="color:${pcol(p)}">${p}%</b><span>${r.booked}/${r.avail}</span></div></div>`;
+  }).join('');
+  const tp=pc(D.booked,D.avail);
+  const part=D.rows.filter(r=>r.startDay>1).map(r=>esc(r.s.name));
+  return `<div class="card oc">
+    <div class="oc-hd"><b>📅 Occupancy</b><div class="oc-mn"><button class="icon-btn" aria-label="Previous month" onclick="homeSetMonth(shiftMonth('${m}',-1))">‹</button><span>${monthLabel(m)}</span><button class="icon-btn" aria-label="Next month" onclick="homeSetMonth(shiftMonth('${m}',1))">›</button></div></div>
+    <div class="muted" style="margin-bottom:10px">Nights booked per property · tap a property for its full calendar</div>
+    <div class="oc-tot"><div><small>Booked</small><b>${D.booked}</b> <span class="muted">nights</span></div><div><small>Available</small><b>${D.avail}</b></div><div><small>Occupancy</small><b style="color:${pcol(tp)}">${tp}%</b></div></div>
+    <div class="oc-row oc-days"><span></span><div class="oc-strip" style="grid-template-columns:repeat(${D.days},1fr)">${nums}</div><span></span></div>
+    ${rows}
+    <div class="cal-lg"><span><i style="background:${OCC_COL.airbnb}"></i>Airbnb</span><span><i style="background:${OCC_COL.offline}"></i>Offline</span><span><i style="background:${OCC_COL.pending}"></i>Offline · pending</span><span><i style="background:${OCC_COL.direct}"></i>Direct</span><span><i class="oc-fr"></i>Empty</span>${part.length?`<span><i class="oc-na"></i>Not ours yet</span>`:''}</div>
+    ${part.length?`<div class="muted" style="margin-top:6px">${part.join(', ')} counted from ${part.length>1?'their':'its'} start date this month.</div>`:''}
+    ${m===monthStr()?`<div class="muted" style="margin-top:6px">Airbnb nights appear once the month's CSV is imported.</div>`:''}
+  </div>`;
+}
+function occDay(sid,ds){
+  const s=siteById(sid); const st=siteStays(sid).filter(x=>x.from<=ds&&ds<x.to); if(!st.length) return;
+  const nm={airbnb:'Airbnb',direct:'Direct',offline:'Offline · paid',pending:'Offline · payment pending'};
+  openModal(`<div class="modal-title">📅 ${esc(s.name)} · ${fmtDate(ds)}</div>`+st.map((x,i)=>`<div class="card">
+      <div style="font-weight:800;font-size:15px">${esc(x.label)}</div>
+      <div class="muted" style="margin-top:3px"><b style="color:${OCC_COL[x.kind]||OCC_COL.direct}">${nm[x.kind]||'Booking'}</b> · ${fmtDate(x.from)} → ${fmtDate(x.to)} · ${bkNights(x.from,x.to)} night${bkNights(x.from,x.to)>1?'s':''}</div>
+      ${x.open?`<button class="cancel-btn" style="margin-top:10px" onclick="closeModal();${x.open}">Open entry</button>`:''}</div>`).join('')
+    +`<button class="submit-btn" onclick="closeModal();openSiteMonth('${sid}','${ds.slice(0,7)}','cal')">Open ${esc(s.name)} calendar</button><button class="cancel-btn" onclick="closeModal()">Close</button>`);
 }
 /* Home month chooser: '' = all time. Tapping a site opens it on the same month. */
 let HOME_M=monthStr();
@@ -953,7 +1017,7 @@ function viewSite(){
   let h=`<div class="hero small"><div class="hero-lbl">${esc(s.name)} · ${esc(pl)}</div><div class="hero-val ${cls}">${inr(pr.profit,{plus:true})}</div><div class="hero-sub">${pr.profit<0?'Loss':'Profit'} ${pl==='All time'?'so far':'· '+esc(pl)}${REP_SETUP==='spread'?' · setup spread':REP_SETUP==='out'?' · setup left out':''}</div>
     <div class="hero-row"><div><b>${inr(pr.totalInc)}</b><span>Income</span></div><div><b>${inr(pr.totalExp)}</b><span>Expenses</span></div>${pr===allP?`<div><b>${inr(res.totalSetupExp)}</b><span>Setup paid</span></div>`:`<div><b class="${allP.profit>0?'g':allP.profit<0?'r':''}">${inr(allP.profit,{plus:true})}</b><span>All-time</span></div>`}</div></div>`;
   h+=monthBarHTML(sm==='custom'?'':sm,'siteSetMonth',true,sm==='custom'?`<span class="muted">Custom: ${esc(pl)}</span>`:'');
-  h+=`<div class="tabs">${[['exp','Expenses'],['inc','Income'],['cal','Bookings'],['buy','Planner'],['settle','Settle'],['rep','Report'],['setup','Split']].map(([k,l])=>`<div class="tab ${SITE_TAB===k?'on':''}" onclick="SITE_TAB='${k}';render()">${l}</div>`).join('')}</div>`;
+  h+=`<div class="tabs">${[['exp','Expenses'],['inc','Income'],['cal','Calendar'],['buy','Planner'],['settle','Settle'],['rep','Report'],['setup','Split']].map(([k,l])=>`<div class="tab ${SITE_TAB===k?'on':''}" onclick="SITE_TAB='${k}';render()">${l}</div>`).join('')}</div>`;
   if(SITE_TAB==='exp') h+=siteExpensesHTML(s);
   else if(SITE_TAB==='inc') h+=siteIncomeHTML(s);
   else if(SITE_TAB==='cal') h+=siteCalendarHTML(s);
@@ -1291,7 +1355,7 @@ function reconcileBooking(id){
   toast('Added to Income'); openReconcile(); render();
 }
 
-/* ---- Site → Bookings tab: month calendar ---- */
+/* ---- Site → Calendar tab: month calendar ---- */
 function siteCalendarHTML(s){
   const sm=sitePeriodMonth(); const m=(sm&&sm!=='custom')?sm:(_repFrom||todayStr()).slice(0,7);
   const [y,mo]=m.split('-').map(Number); const days=new Date(y,mo,0).getDate(); const first=(new Date(y,mo-1,1).getDay()+6)%7;
@@ -1299,17 +1363,20 @@ function siteCalendarHTML(s){
   stays.forEach(st=>{ for(let d=st.from; d<st.to; d=addDays(d,1)){ if(d.slice(0,7)!==m) { if(d>m+'-31') break; continue; } (night[d]=night[d]||[]).push(st); } });
   const col={airbnb:'#ff5a5f',direct:'#1e8449',offline:'#2b6ef0',pending:'#e67e22'};
   const cnt={airbnb:0,direct:0,offline:0,pending:0}; let booked=0;
+  const mEnd=m+'-'+String(days).padStart(2,'0'), startDay=(s.startDate&&s.startDate.slice(0,7)===m)?Number(s.startDate.slice(8,10)):(s.startDate&&s.startDate>mEnd?days+1:1);
   let g=`<div class="cal">${['M','T','W','T','F','S','S'].map(d=>`<div class="cal-h">${d}</div>`).join('')}${'<div></div>'.repeat(first)}`;
   for(let d=1; d<=days; d++){ const ds=m+'-'+String(d).padStart(2,'0'); const st=night[ds]||[];
     if(st.length){ booked++; cnt[st[0].kind]++; }
+    if(d<startDay&&!st.length){ g+=`<div class="cal-d oc-na" style="cursor:default;color:var(--muted)" title="Before this site started">${d}</div>`; continue; }
     g+=`<div class="cal-d ${st.length?'on':''} ${st.length>1?'clash':''} ${ds===todayStr()?'today':''}" style="${st.length?`background:${col[st[0].kind]}`:''}" ${st.length?`onclick="${st[0].open}"`:`onclick="openBookingForm(null,'${s.id}',{checkIn:'${ds}',checkOut:'${addDays(ds,1)}'})"`} title="${st.map(x=>esc(x.label)).join(', ')}">${d}</div>`; }
   g+=`</div>`;
+  const avail=Math.max(booked,days-startDay+1);
   const lg=`<div class="cal-lg">${[['airbnb','Airbnb'],['direct','Direct'],['offline','Offline · paid'],['pending','Offline · pending']].map(([k,l])=>`<span><i style="background:${col[k]}"></i>${l} ${cnt[k]||0}</span>`).join('')}</div>`;
-  let h=`<div class="sec-hdr">Bookings · ${monthLabel(m)} <button class="add-btn" onclick="openBookingForm(null,'${s.id}')">+ Booking</button></div>`;
-  h+=`<div class="card"><div class="kv" style="border:0;padding-top:0"><span><b>${booked} of ${days} nights booked</b></span><b>${Math.round(booked/days*100)}%</b></div>${g}${lg}${Object.values(night).some(x=>x.length>1)?`<div class="r" style="font-weight:700;margin-top:6px">⚠️ Red-bordered days are booked twice — check them.</div>`:''}<div class="muted" style="margin-top:6px">Tap an empty day to add a booking; tap a booked day to open it.</div></div>`;
+  let h=`<div class="sec-hdr">Calendar · ${monthLabel(m)} <button class="add-btn" onclick="openBookingForm(null,'${s.id}')">+ Booking</button></div>`;
+  h+=`<div class="card"><div class="kv" style="border:0;padding-top:0"><span><b>${booked} of ${avail} nights booked</b></span><b>${avail?Math.round(booked/avail*100):0}%</b></div>${g}${lg}${Object.values(night).some(x=>x.length>1)?`<div class="r" style="font-weight:700;margin-top:6px">⚠️ Red-bordered days are booked twice — check them.</div>`:''}<div class="muted" style="margin-top:6px">Tap an empty day to add a booking; tap a booked day to open it.</div></div>`;
   const inM=stays.filter(st=>st.from<=m+'-31'&&st.to>m+'-01').sort((a,b)=>a.from.localeCompare(b.from));
   const nm={airbnb:'Airbnb',direct:'Direct',offline:'Offline · paid',pending:'Offline · payment pending'};
-  h+=inM.length?inM.map(st=>`<div class="entry" onclick="${st.open}"><div class="entry-l"><div class="entry-t">${esc(st.label)}</div><div class="entry-s"><b style="color:${col[st.kind]}">${nm[st.kind]}</b> · ${fmtDate(st.from)} → ${fmtDate(st.to)} · ${bkNights(st.from,st.to)} nights</div></div></div>`).join(''):`<div class="empty"><p>No stays in ${monthLabel(m)}.</p></div>`;
+  h+=inM.length?inM.map(st=>`<div class="entry" onclick="${st.open}"><div class="entry-l"><div class="entry-t">${esc(st.label)}</div><div class="entry-s"><b style="color:${col[st.kind]}">${nm[st.kind]}</b> · ${fmtDate(st.from)} → ${fmtDate(st.to)} · ${bkNights(st.from,st.to)} night${bkNights(st.from,st.to)===1?'':'s'}</div></div></div>`).join(''):`<div class="empty"><p>No stays in ${monthLabel(m)}.</p></div>`;
   const pend=pendingBookings().filter(b=>b.siteId===s.id);
   if(pend.length) h+=`<button class="cancel-btn" style="margin-top:8px;background:var(--accentbg);color:var(--accent);border-color:var(--accentborder)" onclick="openReconcile()">Reconcile ${pend.length} pending offline booking${pend.length>1?'s':''}</button>`;
   return h;
