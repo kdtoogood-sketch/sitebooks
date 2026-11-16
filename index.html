@@ -122,6 +122,10 @@ img.rc{max-width:100%;max-height:150px;border-radius:10px;margin-top:8px;border:
 .oc-list{margin-top:10px}.oc-list .entry{margin-bottom:6px}
 .stay-box{background:var(--card2);border:1.5px solid var(--border);border-radius:12px;padding:10px 12px 8px;margin:0 0 10px}
 .oc-fix{display:block;width:100%;margin-top:10px;border:1px dashed #1e8449;background:#f0faf3;color:#1e8449;border-radius:10px;padding:9px 10px;font:inherit;font-size:12.5px;font-weight:800;text-align:left;cursor:pointer}
+.sw-body{min-height:55vh}
+.sw-dots{display:flex;justify-content:center;gap:6px;margin:-6px 0 12px}.sw-dots i{width:6px;height:6px;border-radius:50%;background:var(--border)}.sw-dots i.on{width:16px;border-radius:4px;background:var(--accent)}
+@keyframes swInR{from{opacity:.3;transform:translateX(28px)}to{opacity:1;transform:none}}@keyframes swInL{from{opacity:.3;transform:translateX(-28px)}to{opacity:1;transform:none}}
+.sw-in-r{animation:swInR .24s ease-out}.sw-in-l{animation:swInL .24s ease-out}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:8px}.cal-h{text-align:center;font-size:10px;color:var(--muted);font-weight:700}
 .cal-d{text-align:center;padding:8px 0;border-radius:8px;font-size:12px;font-weight:700;background:var(--card2);color:var(--text2);cursor:pointer;border:2px solid transparent}
 .cal-d.on{color:#fff}.cal-d.clash{border-color:#c0392b;box-shadow:0 0 0 1px #fff inset}.cal-d.today{outline:2px solid var(--text);outline-offset:-2px}
@@ -1055,10 +1059,11 @@ function viewSite(){
   const allP=computeSite(s,repExpOf(s.id),incomesOf(s.id),settlementsOf(s.id));
   const pr=(_repFrom||_repTo)?computeSite(s,repExpOf(s.id),incomesOf(s.id),settlementsOf(s.id),{from:_repFrom,to:_repTo}):allP;
   const cls=pr.profit>0?'g':pr.profit<0?'r':'';
-  let h=`<div class="hero small"><div class="hero-lbl">${esc(s.name)} · ${esc(pl)}</div><div class="hero-val ${cls}">${inr(pr.profit,{plus:true})}</div><div class="hero-sub">${pr.profit<0?'Loss':'Profit'} ${pl==='All time'?'so far':'· '+esc(pl)}${REP_SETUP==='spread'?' · setup spread':REP_SETUP==='out'?' · setup left out':''}</div>
+  let h=`<div class="hero small" data-swipe="site"><div class="hero-lbl">${esc(s.name)} · ${esc(pl)}</div><div class="hero-val ${cls}">${inr(pr.profit,{plus:true})}</div><div class="hero-sub">${pr.profit<0?'Loss':'Profit'} ${pl==='All time'?'so far':'· '+esc(pl)}${REP_SETUP==='spread'?' · setup spread':REP_SETUP==='out'?' · setup left out':''}</div>
     <div class="hero-row"><div><b>${inr(pr.totalInc)}</b><span>Income</span></div><div><b>${inr(pr.totalExp)}</b><span>Expenses</span></div>${pr===allP?`<div><b>${inr(res.totalSetupExp)}</b><span>Setup paid</span></div>`:`<div><b class="${allP.profit>0?'g':allP.profit<0?'r':''}">${inr(allP.profit,{plus:true})}</b><span>All-time</span></div>`}</div></div>`;
+  h+=siteDotsHTML(s.id);
   h+=monthBarHTML(sm==='custom'?'':sm,'siteSetMonth',true,sm==='custom'?`<span class="muted">Custom: ${esc(pl)}</span>`:'');
-  h+=`<div class="tabs">${[['exp','Expenses'],['inc','Income'],['cal','Calendar'],['buy','Planner'],['settle','Settle'],['rep','Report'],['setup','Split']].map(([k,l])=>`<div class="tab ${SITE_TAB===k?'on':''}" onclick="SITE_TAB='${k}';render()">${l}</div>`).join('')}</div>`;
+  h+=`<div class="tabs" id="siteTabs">${SITE_TABS.map(([k,l])=>`<div class="tab ${SITE_TAB===k?'on':''}" onclick="SITE_TAB='${k}';render()">${l}</div>`).join('')}</div><div data-swipe="tab" class="sw-body">`;
   if(SITE_TAB==='exp') h+=siteExpensesHTML(s);
   else if(SITE_TAB==='inc') h+=siteIncomeHTML(s);
   else if(SITE_TAB==='cal') h+=siteCalendarHTML(s);
@@ -1066,8 +1071,41 @@ function viewSite(){
   else if(SITE_TAB==='rep') h+=siteReportHTML(s,res);
   else if(SITE_TAB==='buy') h+=buyListHTML(s.id);
   else h+=siteSetupHTML(s);
-  return h;
+  return h+'</div>';
 }
+/* ════════════ SWIPE ════════════
+   On a site: swipe the content left/right → next/previous tab; swipe the dark site card → next/previous site
+   (same month, same tab). Only moves between screens — nothing is saved. */
+const SITE_TABS=[['exp','Expenses'],['inc','Income'],['cal','Calendar'],['buy','Planner'],['settle','Settle'],['rep','Report'],['setup','Split']];
+function siteDotsHTML(id){ const L=siteList(); if(L.length<2) return ''; return `<div class="sw-dots" aria-hidden="true">${L.map(x=>`<i class="${x.id===id?'on':''}"></i>`).join('')}</div>`; }
+function swipeGo(zone,dir){            // dir +1 = swipe left (next), -1 = swipe right (previous)
+  if(TAB!=='site') return false;
+  if(zone==='site'){ const L=siteList(), i=L.findIndex(x=>x.id===CUR_SITE), j=i+dir; if(i<0||j<0||j>=L.length) return false; CUR_SITE=L[j].id; }
+  else { const i=SITE_TABS.findIndex(t=>t[0]===SITE_TAB), j=i+dir; if(i<0||j<0||j>=SITE_TABS.length) return false; SITE_TAB=SITE_TABS[j][0]; }
+  render();
+  const tb=$('siteTabs'), on=tb&&tb.querySelector('.tab.on'); if(on) tb.scrollLeft=on.offsetLeft-(tb.clientWidth-on.offsetWidth)/2;
+  const tgt=document.querySelector(zone==='site'?'.hero[data-swipe]':'.sw-body'); if(tgt){ tgt.classList.add(dir>0?'sw-in-r':'sw-in-l'); setTimeout(()=>tgt.classList.remove('sw-in-r','sw-in-l'),260); }
+  if(zone==='tab'&&tb){ const sc=$('scroll'), top=tb.getBoundingClientRect().top-sc.getBoundingClientRect().top; if(top<0) sc.scrollTop+=top-8; }
+  return true;
+}
+(function(){
+  let x0=0,y0=0,t0=0,zone=null;
+  const skip=el=>el.closest('.tabs,.mbar,input,select,textarea,button,.oc-strip,#modal')||[...(function*(e){ for(;e&&e.id!=='view';e=e.parentElement) yield e; })(el)].some(e=>e.scrollWidth>e.clientWidth+4&&/(auto|scroll)/.test(getComputedStyle(e).overflowX));
+  document.addEventListener('touchstart',ev=>{
+    zone=null; if(TAB!=='site'||ev.touches.length!==1) return;
+    const t=ev.touches[0], z=ev.target.closest&&ev.target.closest('[data-swipe]'); if(!z) return;
+    if(t.clientX<24||t.clientX>window.innerWidth-24) return;            // leave the edges to Android's back gesture
+    if(z.dataset.swipe==='tab'&&skip(ev.target)) return;
+    x0=t.clientX; y0=t.clientY; t0=Date.now(); zone=z.dataset.swipe;
+  },{passive:true});
+  document.addEventListener('touchend',ev=>{
+    if(!zone) return; const z=zone; zone=null;
+    const t=ev.changedTouches[0], dx=t.clientX-x0, dy=t.clientY-y0;
+    if(Date.now()-t0>900) return;
+    if(Math.abs(dx)<Math.max(70,window.innerWidth*0.25)||Math.abs(dx)<Math.abs(dy)*2) return;
+    swipeGo(z,dx<0?1:-1);
+  },{passive:true});
+})();
 function paidByText(lines){ return (lines||[]).map(l=>`${esc(pname(l.pid))} ${inr(toPaise(l.amount))}`).join(' + '); }
 
 function siteExpensesHTML(s){
