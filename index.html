@@ -120,6 +120,8 @@ img.rc{max-width:100%;max-height:150px;border-radius:10px;margin-top:8px;border:
 .oc-sum i{width:10px;height:10px;border-radius:3px}.oc-sum span{color:var(--muted);font-size:12px}.oc-sum em{font-style:normal;font-weight:800}
 .oc-sum.on{border-color:var(--text);background:var(--card)}
 .oc-list{margin-top:10px}.oc-list .entry{margin-bottom:6px}
+.stay-box{background:var(--card2);border:1.5px solid var(--border);border-radius:12px;padding:10px 12px 8px;margin:0 0 10px}
+.oc-fix{display:block;width:100%;margin-top:10px;border:1px dashed #1e8449;background:#f0faf3;color:#1e8449;border-radius:10px;padding:9px 10px;font:inherit;font-size:12.5px;font-weight:800;text-align:left;cursor:pointer}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:8px}.cal-h{text-align:center;font-size:10px;color:var(--muted);font-weight:700}
 .cal-d{text-align:center;padding:8px 0;border-radius:8px;font-size:12px;font-weight:700;background:var(--card2);color:var(--text2);cursor:pointer;border:2px solid transparent}
 .cal-d.on{color:#fff}.cal-d.clash{border-color:#c0392b;box-shadow:0 0 0 1px #fff inset}.cal-d.today{outline:2px solid var(--text);outline-offset:-2px}
@@ -866,7 +868,16 @@ function occupancyCardHTML(m){
     ${fl?(fl.length?`<div class="oc-list">${fl.map(({r,st})=>`<div class="entry" onclick="${st.open}"><div class="entry-l"><div class="entry-t">${esc(st.label)}</div><div class="entry-s"><b>${esc(r.s.name)}</b> · ${fmtDate(st.from)} → ${fmtDate(st.to)} · ${bkNights(st.from,st.to)} night${bkNights(st.from,st.to)===1?'':'s'}</div></div><div class="entry-r" style="font-weight:800">${inr(toPaise(st.amt||0))}</div></div>`).join('')}</div>`:`<div class="muted" style="margin-top:8px">No ${OCC_NM[CAL_F].toLowerCase()} stays in ${monthLabel(m)}.</div>`):''}
     ${part.length?`<div class="muted" style="margin-top:6px">${part.join(', ')} counted from ${part.length>1?'their':'its'} start date this month.</div>`:''}
     ${m===monthStr()?`<div class="muted" style="margin-top:6px">Airbnb nights appear once the month's CSV is imported.</div>`:''}
+    ${(()=>{ const n=noStayDates().length; return n?`<button class="oc-fix" onclick="openNoStayDates()">🗓️ ${n} direct booking income${n===1?' has':'s have'} no stay dates — add them ›</button>`:''; })()}
   </div>`;
+}
+// non-Airbnb booking income entered without check-in/check-out (mostly entries from before the calendar existed)
+function noStayDates(){ return siteList().flatMap(s=>incomesOf(s.id).filter(i=>i.kind==='booking'&&!i.bookingRef&&!(isAirbnbSrc(i.source)||(!i.source&&i.confCode))&&!(i.checkIn&&i.checkOut)).map(i=>({s,i}))).sort((a,b)=>String(b.i.date).localeCompare(String(a.i.date))); }
+function openNoStayDates(){
+  const L=noStayDates();
+  openModal(`<div class="modal-title">🗓️ Add stay dates</div><div class="muted" style="margin:0 2px 10px">These direct booking incomes have no check-in / check-out, so they don't show on the calendar. Open one, fill the two dates and tap Update — the amount and who received it stay the same.</div>`
+    +(L.length?L.map(({s,i})=>`<div class="entry" onclick="closeModal();openIncomeForm('${s.id}','${i.id}')"><div class="entry-l"><div class="entry-t">${esc(s.name)} · ${esc(i.source||'No source')}</div><div class="entry-s">${fmtDate(i.date)}${i.note?' · '+esc(i.note):''}</div></div><div style="font-weight:800">${inr(toPaise(i.amount))}</div></div>`).join(''):'<div class="empty"><p>All done ✓</p></div>')
+    +`<button class="cancel-btn" onclick="closeModal()">Close</button>`);
 }
 function occDay(sid,ds){
   const s=siteById(sid); const st=siteStays(sid).filter(x=>x.from<=ds&&ds<x.to); if(!st.length) return;
@@ -1262,7 +1273,7 @@ const pendingBookings=()=>bookingList().filter(b=>bkStatus(b)==='pending').sort(
 function siteStays(sid){
   const out=[];
   // three types everywhere: airbnb (CSV import), direct (any paid non-Airbnb stay — offline booking or income with dates), pending (offline booking not paid yet)
-  incomesOf(sid).filter(i=>i.checkIn&&i.checkOut&&i.kind!=='capital').forEach(i=>out.push({from:i.checkIn,to:i.checkOut,kind:i.confCode&&!i.bookingRef?'airbnb':'direct',label:i.guestName||i.note||i.source||'Booking',open:`openIncomeForm('${sid}','${i.id}')`,id:i.id,amt:Number(i.amount)||0}));
+  incomesOf(sid).filter(i=>i.checkIn&&i.checkOut&&i.kind!=='capital').forEach(i=>out.push({from:i.checkIn,to:i.checkOut,kind:!i.bookingRef&&(isAirbnbSrc(i.source)||(!i.source&&i.confCode))?'airbnb':'direct',label:i.guestName||i.note||i.source||'Booking',open:`openIncomeForm('${sid}','${i.id}')`,id:i.id,amt:Number(i.amount)||0}));
   bookingList().filter(b=>b.siteId===sid&&bkStatus(b)==='pending'&&b.checkIn&&b.checkOut).forEach(b=>out.push({from:b.checkIn,to:b.checkOut,kind:'pending',label:b.guest||'Offline booking',open:`openBookingForm('${b.id}')`,id:b.id,amt:bkExpected(b)/100}));
   return out;
 }
@@ -1464,19 +1475,20 @@ function openIncomeForm(siteId,id,opt){
       <option value="capital" ${kind==='capital'?'selected':''}>Partner capital (a partner handing money in)</option>
       <option value="refund" ${kind==='refund'?'selected':''}>Refund (e.g. deposit returned)</option></select></div>
     <div class="form-row"><div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="f_date" value="${e?.date||todayStr()}"></div><div class="form-group"><label class="form-label">Amount (₹) *</label><input type="number" step="0.01" class="form-input" id="f_amount" inputmode="decimal" value="${e?.amount||''}" oninput="onAmountInput()"></div></div>
-    <div class="form-group" id="src_wrap"><label class="form-label">Source</label><input class="form-input" list="srclist" id="f_source" value="${esc(e?.source||'')}" placeholder="Airbnb, Booking.com, Direct, Cash…"><datalist id="srclist"><option value="Airbnb"><option value="Booking.com"><option value="MakeMyTrip"><option value="Direct booking"><option value="Cash"></datalist></div>
+    <div class="form-group" id="src_wrap">${srcPickHTML(e?.source||'')}</div>
     <div id="bk_outer" style="display:${kind==='booking'?'block':'none'}">${bkFormHTML(e)}</div>
     <div id="ctb_section" style="display:${kind==='capital'?'block':'none'}"><div class="form-label">Contributed by</div><div id="ctb_wrap">${linesEditorHTML('ctb',_contribLines,ids)}</div></div>
     <div class="form-label" id="rcv_lbl">${kind==='capital'?'Now held by':'Received by (whose account / cash)'}</div><div id="rcv_wrap">${linesEditorHTML('rcv',_recvLines,ids)}</div>
     <div class="form-group" style="margin-top:12px"><label class="form-label">Note</label><textarea class="form-textarea" id="f_note" placeholder="Guest name, booking ref, month…">${esc(e?.note||'')}</textarea></div>
     <button class="submit-btn" onclick="saveIncome('${siteId}','${id||''}')">${e?'Update':'Save'}</button>
     ${e?`<button class="cancel-btn danger" onclick="removeEntry('incomes','${id}')">Delete</button>`:''}<button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
-  lineTotals('rcv'); lineTotals('ctb');
+  lineTotals('rcv'); lineTotals('ctb'); stayHint();
 }
 function onIncomeKind(){ const k=$('f_ikind').value; $('ctb_section').style.display=k==='capital'?'block':'none'; $('rcv_lbl').textContent=k==='capital'?'Now held by':'Received by (whose account / cash)'; $('src_wrap').style.display=k==='booking'?'block':'none'; if($('bk_outer'))$('bk_outer').style.display=k==='booking'?'block':'none'; }
 function saveIncome(siteId,id){
   const kind=$('f_ikind').value; const amount=Number($('f_amount').value||0); if(!(amount>0)){toast('Enter the amount');return;}
   const date=$('f_date').value; if(!date){toast('Pick a date');return;}
+  if(kind==='booking'&&$('f_cin')){ const ci=$('f_cin').value, co=$('f_cout').value; if((ci&&!co)||(!ci&&co)){toast('Fill both check-in and check-out (or leave both empty)');return;} if(ci&&co&&co<=ci){toast('Check-out must be after check-in');return;} }
   const receivedBy=readLines('rcv',_recvLines.length).filter(l=>l.amount>0);
   const v=validateLines(receivedBy,amount,kind==='capital'?'Held by':'Received by'); if(!v.ok){toast(v.msg);return;}
   let contributedBy;
@@ -2191,16 +2203,31 @@ function bkCalc(){
   const net=g-Number($('f_fee').value||0)-Number($('f_tds').value||0)-Number($('f_oth').value||0);
   $('f_amount').value=Math.round(net*100)/100; $('bk_net').textContent='Net in hand: '+inr(toPaise(net)); onAmountInput();
 }
+/* Source picker for booking income. Colour on the calendar: Airbnb = red, anything else = green (direct). */
+const SRC_OPTS=['Airbnb','Direct booking','Booking.com','MakeMyTrip'];
+const isAirbnbSrc=src=>/^\s*air/i.test(String(src||''));                 // also catches typos like "Airnbn", "Airbnb 20-24"
+function srcPickHTML(cur){
+  const known=SRC_OPTS.includes(cur), other=!!cur&&!known;
+  return `<label class="form-label">Source</label><select class="form-select" id="f_srcsel" onchange="onSrcSel()">
+      <option value="" ${!cur?'selected':''}>— choose —</option>${SRC_OPTS.map(o=>`<option ${cur===o?'selected':''}>${o}</option>`).join('')}<option value="__other" ${other?'selected':''}>Other…</option></select>
+    <input class="form-input" id="f_source" style="margin-top:6px;display:${other?'block':'none'}" placeholder="Type the source (e.g. Cash, Agent name)" value="${esc(other?cur:(cur||''))}">`;
+}
+function onSrcSel(){ const v=$('f_srcsel').value, t=$('f_source'); if(v==='__other'){ t.style.display='block'; if(SRC_OPTS.includes(t.value))t.value=''; t.focus(); } else { t.style.display='none'; t.value=v; } stayHint(); }
+function stayHint(){ const h=$('stay_hint'); if(!h)return; const src=$('f_source')?$('f_source').value:'', ci=$('f_cin')?.value, co=$('f_cout')?.value;
+  h.innerHTML=ci&&co?(co>ci?`🗓️ ${bkNights(ci,co)} night${bkNights(ci,co)===1?'':'s'} — shows on the calendar in <b style="color:${isAirbnbSrc(src)?'#ff5a5f':'#1e8449'}">${isAirbnbSrc(src)?'red (Airbnb)':'green (direct)'}</b>`:'<span class="r">Check-out must be after check-in</span>'):'Add check-in and check-out to show this stay on the calendar.'; }
 function bkFormHTML(e){
   const has=e&&e.gross!=null&&e.gross!=='';
   const oth=has?Math.round((Number(e.gross)-Number(e.platformFee||0)-Number(e.tds||0)-Number(e.amount||0))*100)/100:'';
-  return `<div id="bk_wrap"><details ${has||e?.guestName||e?.confCode?'open':''} style="margin:4px 0 12px;background:var(--card2);border:1.5px solid var(--border);border-radius:12px;padding:10px 12px">
+  return `<div id="bk_wrap"><div class="stay-box">
+    <div class="form-row"><div class="form-group"><label class="form-label">Check-in</label><input type="date" class="form-input" id="f_cin" value="${e?.checkIn||''}" onchange="stayHint()"></div><div class="form-group"><label class="form-label">Check-out</label><input type="date" class="form-input" id="f_cout" value="${e?.checkOut||''}" onchange="stayHint()"></div></div>
+    <div class="form-group" style="margin-bottom:4px"><label class="form-label">Guest name</label><input class="form-input" id="f_guest" value="${esc(e?.guestName||'')}"></div>
+    <div class="muted" id="stay_hint" style="margin:2px 2px 0"></div></div>
+    <details ${has||e?.confCode?'open':''} style="margin:4px 0 12px;background:var(--card2);border:1.5px solid var(--border);border-radius:12px;padding:10px 12px">
     <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text2)">🧾 Booking breakdown — guest paid, Airbnb fee, TDS</summary>
     <div class="form-row" style="margin-top:10px"><div class="form-group"><label class="form-label">Guest paid / gross (₹)</label><input type="number" step="0.01" class="form-input" id="f_gross" inputmode="decimal" value="${has?e.gross:''}" oninput="bkCalc()"></div><div class="form-group"><label class="form-label">Airbnb fee (₹)</label><input type="number" step="0.01" class="form-input" id="f_fee" inputmode="decimal" value="${has?(e.platformFee||''):''}" oninput="bkCalc()"></div></div>
     <div class="form-row"><div class="form-group"><label class="form-label">TDS deducted (₹)</label><input type="number" step="0.01" class="form-input" id="f_tds" inputmode="decimal" value="${has?(e.tds||''):''}" oninput="bkCalc()"></div><div class="form-group"><label class="form-label">Other deductions (₹)</label><input type="number" step="0.01" class="form-input" id="f_oth" inputmode="decimal" value="${oth||''}" oninput="bkCalc()"></div></div>
     <div class="split-total ok" id="bk_net">${has?'Net in hand: '+inr(toPaise(e.amount)):'Fill guest paid to auto-calculate the net amount'}</div>
-    <div class="form-row"><div class="form-group"><label class="form-label">Guest name</label><input class="form-input" id="f_guest" value="${esc(e?.guestName||'')}"></div><div class="form-group"><label class="form-label">Confirmation code</label><input class="form-input" id="f_code" value="${esc(e?.confCode||'')}" autocapitalize="characters"></div></div>
-    <div class="form-row"><div class="form-group"><label class="form-label">Check-in</label><input type="date" class="form-input" id="f_cin" value="${e?.checkIn||''}"></div><div class="form-group"><label class="form-label">Check-out</label><input type="date" class="form-input" id="f_cout" value="${e?.checkOut||''}"></div></div>
+    <div class="form-group"><label class="form-label">Confirmation code</label><input class="form-input" id="f_code" value="${esc(e?.confCode||'')}" autocapitalize="characters"></div>
   </details></div>`;
 }
 function readBkForm(amount){
