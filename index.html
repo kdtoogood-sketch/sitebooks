@@ -138,6 +138,11 @@ img.rc{max-width:100%;max-height:150px;border-radius:10px;margin-top:8px;border:
 .ms-row input[type=number]{width:110px;flex:none}
 .ms-box{border:1.5px solid var(--blue);background:#f7fbff;border-radius:12px;padding:8px 10px;margin:0 0 12px}
 .tagsplit{background:var(--bluebg);color:var(--blue);padding:1px 6px;border-radius:6px;font-size:10px}
+.pf-up{display:block;text-align:center;padding:11px;border:1.5px dashed var(--border);border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;color:var(--muted)}
+.pf-rm{display:inline-block;margin:6px 0 0 10px;font-size:12.5px;font-weight:700;color:var(--red);cursor:pointer;vertical-align:top}
+.clip{display:inline-block;margin-right:6px;font-size:15px;cursor:pointer;padding:2px}
+.rc-view{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px}
+.rc-view img{max-width:100%;max-height:85vh;border-radius:10px}.rc-view .rc-x{color:#fff;font-weight:700;margin-top:12px;font-size:14px}
 </style>
 </head>
 <body>
@@ -1117,7 +1122,7 @@ function siteExpensesHTML(s){
   return h+list.map(e=>`<div class="entry" onclick="openExpenseForm('${s.id}','${e.id}')">
     <div class="entry-l"><div class="entry-t">${esc(e.note||e.category||'Expense')}</div>
       <div class="entry-s">${e.category?esc(e.category)+' · ':''}${e.vendor?esc(e.vendor)+' · ':''}${fmtDate(e.date)}${e.kind==='setup'?' · <b class="tagsetup">SETUP</b>':''}${e.split&&e.split.length?' · <b class="tagov">CUSTOM SPLIT</b>':''}${(()=>{const g=groupInfo(e);return g?` · <b class="tagsplit">🔗 ${inr(g.total)} ÷ ${g.n} SITES</b>`:'';})()}</div>
-      <div class="entry-s">Paid by ${paidByText(e.paidBy)}</div></div><div class="entry-a r">${inr(toPaise(e.amount))}</div></div>`).join('');
+      <div class="entry-s">Paid by ${paidByText(e.paidBy)}</div></div><div class="entry-a r">${_clipH('expenses',e)}${inr(toPaise(e.amount))}</div></div>`).join('');
 }
 function siteIncomeHTML(s){
   const list=incomesOf(s.id).filter(i=>_inSitePeriod(i.date)).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
@@ -1132,7 +1137,7 @@ function siteIncomeHTML(s){
       <div class="entry-s">${i.kind==='capital'?'From '+paidByText(i.contributedBy)+' → held by ':'Received by '}${paidByText(i.receivedBy)}</div>
       ${(()=>{const b=bkOf(i); return b.has?`<div class="entry-s">Guest paid ${inr(b.gross)} · fee −${inr(b.fee)} · TDS −${inr(b.tds)}${b.other?' · other −'+inr(b.other):''}</div>`:'';})()}
       ${i.checkIn?`<div class="entry-s">🛏️ ${fmtDate(i.checkIn)}${i.checkOut?' → '+fmtDate(i.checkOut):''}${i.importedFrom?' · <b class="b">CSV</b>':''}</div>`:''}</div>
-    <div class="entry-a ${i.kind==='capital'?'b':'g'}">${inr(toPaise(i.amount))}</div></div>`).join('');
+    <div class="entry-a ${i.kind==='capital'?'b':'g'}">${_clipH('incomes',i)}${inr(toPaise(i.amount))}</div></div>`).join('');
 }
 
 /* ---- expense form ---- */
@@ -1159,7 +1164,7 @@ let _formSite=null;
 function categoryOptions(){ const set=new Set(['Rent','Furniture','Electricity','Water','WiFi / Internet','Cleaning','Repairs','Maintenance','Supplies','Deposit','Commission','Other']); expensesOf(_formSite).forEach(e=>e.category&&set.add(e.category)); DB.expenses.forEach(e=>{if(!e.deleted&&e.category)set.add(e.category);}); return [...set].sort(); }
 
 function openExpenseForm(siteId,id,opt){
-  opt=opt||{};
+  opt=opt||{}; _receipt=''; _receiptDel=false;
   _formSite=siteId; const s=siteById(siteId); const e=id?DB.expenses.find(x=>x.id===id):null;
   const ids=s.partners.map(p=>p.pid);
   _payLines=e?JSON.parse(JSON.stringify(e.paidBy||[])):[{pid:ids.includes(ME.name&&partnerList().find(p=>p.name===ME.name)?.id)?partnerList().find(p=>p.name===ME.name).id:ids[0],amount:''}];
@@ -1191,7 +1196,7 @@ function openExpenseForm(siteId,id,opt){
     <label class="chk" style="margin:14px 0 6px"><input type="checkbox" id="f_ov" ${hasOv?'checked':''} onchange="toggleOverride()"> Split this expense differently from the site default</label>
     <div id="ov_wrap" style="display:${hasOv?'block':'none'}"><div class="muted" style="margin-bottom:6px">Site default: ${s.expenseSplit.map(x=>esc(pname(x.pid))+' '+x.pct+'%').join(' · ')}</div>${splitEditorHTML('ovs',hasOv?e.split:s.expenseSplit,ids)}</div>
     <div class="form-group"><label class="form-label">Note</label><textarea class="form-textarea" id="f_note" placeholder="What was this for?">${esc(e?.note||'')}</textarea></div>
-    <div class="form-group"><label class="form-label">Bill / receipt photo (optional)</label><input type="file" accept="image/*" id="f_photo" onchange="pickReceipt(this)"><div id="f_photo_prev">${e?.receipt?`<img class="rc" src="${e.receipt}">`:''}</div></div>
+    ${proofFieldHTML(e?.receipt,'Bill / receipt photo')}
     <button class="submit-btn" onclick="saveExpense('${siteId}','${id||''}')">${e?'Update':'Save'}</button>
     ${e&&inGroup?`<button class="cancel-btn danger" onclick="removeGroup('${e.group.id}')">Delete from all ${gm.length} sites</button><button class="cancel-btn danger" onclick="removeEntry('expenses','${id}')">Delete only ${esc(s.name)}'s share</button>`:e?`<button class="cancel-btn danger" onclick="removeEntry('expenses','${id}')">Delete</button>`:''}<button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
   lineTotals('pay'); if(hasOv) updSplitTotal('ovs');
@@ -1272,7 +1277,7 @@ function saveExpenseGroup(siteId,id){
     const ex=members.find(m=>m.siteId===x.site.id);
     const rec={...(ex||{id:uid()}),siteId:x.site.id,amount:x.p/100,paidBy:x.paidBy,...common,
       stampedSplit:(ex&&ex.stampedSplit&&ex.stampedSplit.length&&!split)?ex.stampedSplit:x.site.expenseSplit.map(y=>({pid:y.pid,pct:y.pct})),
-      receipt:_receipt||ex?.receipt||old?.receipt||'',
+      receipt:_receiptDel?'':(_receipt||ex?.receipt||old?.receipt||''),
       group:{id:gid,total:amount,n:picks.length}};
     saveRecord('expenses',rec,ME.name);
   });
@@ -1460,11 +1465,25 @@ function siteCalendarHTML(s){
   return h;
 }
 function toggleOverride(){ $('ov_wrap').style.display=$('f_ov').checked?'block':'none'; if($('f_ov').checked) updSplitTotal('ovs'); }
-let _receipt='';
+let _receipt='', _receiptDel=false;
+// one proof / receipt picture per entry (expenses and money received) — optional; shrunk on the phone before saving
+function proofFieldHTML(cur,label){
+  return `<div class="form-group"><label class="form-label">${label} (optional)</label>
+    <label class="pf-up"><input type="file" accept="image/*" id="f_photo" style="display:none" onchange="pickReceipt(this)"><span id="f_photo_lbl">${cur?'📷 Change photo':'📷 Add photo / screenshot'}</span></label>
+    <div id="f_photo_prev">${cur?`<img class="rc" src="${cur}" onclick="viewReceiptSrc(this.src)"><a class="pf-rm" onclick="removeReceipt()">Remove photo</a>`:''}</div></div>`;
+}
 async function pickReceipt(inp){
   const f=inp.files[0]; if(!f) return;
-  try{ _receipt=await compressImage(f,900,0.72); $('f_photo_prev').innerHTML=`<img class="rc" src="${_receipt}">`; }catch(e){ toast('Could not read photo'); }
+  try{ _receipt=await compressImage(f,900,0.72); _receiptDel=false; $('f_photo_prev').innerHTML=`<img class="rc" src="${_receipt}" onclick="viewReceiptSrc(this.src)"><a class="pf-rm" onclick="removeReceipt()">Remove photo</a>`; $('f_photo_lbl').textContent='📷 Change photo'; }catch(e){ toast('Could not read photo'); }
 }
+function removeReceipt(){ _receipt=''; _receiptDel=true; $('f_photo_prev').innerHTML='<div class="muted" style="font-size:12px;margin-top:6px">Photo will be removed when you save.</div>'; $('f_photo_lbl').textContent='📷 Add photo / screenshot'; const i=$('f_photo'); if(i) i.value=''; }
+function viewReceiptSrc(src){
+  if(!src) return;
+  const o=document.createElement('div'); o.className='rc-view'; o.onclick=()=>o.remove();
+  o.innerHTML=`<img src="${src}"><div class="rc-x">✕ Close</div>`; document.body.appendChild(o);
+}
+function viewReceipt(kind,id){ const r=(DB[kind]||[]).find(x=>x.id===id); if(r&&r.receipt) viewReceiptSrc(r.receipt); }
+const _clipH=(kind,r)=>r&&r.receipt?`<span class="clip" title="See proof" onclick="event.stopPropagation();viewReceipt('${kind}','${r.id}')">📎</span>`:'';
 function compressImage(file,maxW,q){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=e=>{ const img=new Image(); img.onload=()=>{ const k=Math.min(maxW/img.width,maxW/img.height,1); const c=document.createElement('canvas'); c.width=img.width*k; c.height=img.height*k; c.getContext('2d').drawImage(img,0,0,c.width,c.height); res(c.toDataURL('image/jpeg',q)); }; img.onerror=rej; img.src=e.target.result; }; r.onerror=rej; r.readAsDataURL(file); }); }
 
 function saveExpense(siteId,id){
@@ -1484,7 +1503,7 @@ function saveExpense(siteId,id){
   const rec={...(old||{id:uid()}),siteId:toSite,date,amount,category:$('f_cat').value.trim(),vendor:$('f_vendor').value.trim(),kind:$('f_kind').value,paidBy,note:$('f_note').value.trim(),
     split:split||null,
     stampedSplit:(!moved&&old&&old.stampedSplit&&old.stampedSplit.length&&!$('f_ov').checked)?old.stampedSplit:T.expenseSplit.map(x=>({pid:x.pid,pct:x.pct})),
-    receipt:_receipt||old?.receipt||''};
+    receipt:_receiptDel?'':(_receipt||old?.receipt||'')};
   if(old&&old.group){ rec.group=null; if(groupMembers(old.group.id).length>1) toast('This site’s share is now separate from the split bill'); }
   saveRecord('expenses',rec,ME.name); if(rec.receipt) setTimeout(sbDriveRun,8000); _receipt='';
   logAction(ME.name,(moved?'Moved expense '+inr(toPaise(amount))+' from '+s.name+' to '+T.name:(old?'Edited':'Added')+' expense '+inr(toPaise(amount)))+' — '+(rec.category||rec.note||''),toSite);
@@ -1499,7 +1518,7 @@ function removeEntry(kind,id){
 
 /* ---- income form ---- */
 function openIncomeForm(siteId,id,opt){
-  opt=opt||{};
+  opt=opt||{}; _receipt=''; _receiptDel=false;
   _formSite=siteId; const s=siteById(siteId); const e=id?DB.incomes.find(x=>x.id===id):null;
   const ids=s.partners.map(p=>p.pid); const me=partnerList().find(p=>p.name===ME.name)?.id;
   _recvLines=e?JSON.parse(JSON.stringify(e.receivedBy||[])):[{pid:ids.includes(me)?me:ids[0],amount:''}];
@@ -1518,6 +1537,7 @@ function openIncomeForm(siteId,id,opt){
     <div id="ctb_section" style="display:${kind==='capital'?'block':'none'}"><div class="form-label">Contributed by</div><div id="ctb_wrap">${linesEditorHTML('ctb',_contribLines,ids)}</div></div>
     <div class="form-label" id="rcv_lbl">${kind==='capital'?'Now held by':'Received by (whose account / cash)'}</div><div id="rcv_wrap">${linesEditorHTML('rcv',_recvLines,ids)}</div>
     <div class="form-group" style="margin-top:12px"><label class="form-label">Note</label><textarea class="form-textarea" id="f_note" placeholder="Guest name, booking ref, month…">${esc(e?.note||'')}</textarea></div>
+    ${proofFieldHTML(e?.receipt,'Proof / screenshot')}
     <button class="submit-btn" onclick="saveIncome('${siteId}','${id||''}')">${e?'Update':'Save'}</button>
     ${e?`<button class="cancel-btn danger" onclick="removeEntry('incomes','${id}')">Delete</button>`:''}<button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
   lineTotals('rcv'); lineTotals('ctb'); stayHint();
@@ -1536,8 +1556,8 @@ function saveIncome(siteId,id){
   const old=id?DB.incomes.find(x=>x.id===id):null;
   const bk=kind==='booking'?readBkForm(amount):{gross:null,platformFee:null,tds:null};
   if(bk.gross!=null){ const chk=toPaise(bk.gross)-toPaise(bk.platformFee)-toPaise(bk.tds); if(chk<toPaise(amount)){ toast('Guest paid minus fee and TDS is less than the net amount — check the figures'); return; } }
-  const rec={...(old||{id:uid()}),siteId:toSite,date,amount,kind,source:kind==='booking'?$('f_source').value.trim():'',receivedBy,contributedBy,note:$('f_note').value.trim(),...bk};
-  saveRecord('incomes',rec,ME.name);
+  const rec={...(old||{id:uid()}),siteId:toSite,date,amount,kind,source:kind==='booking'?$('f_source').value.trim():'',receivedBy,contributedBy,note:$('f_note').value.trim(),...bk,receipt:_receiptDel?'':(_receipt||old?.receipt||'')};
+  saveRecord('incomes',rec,ME.name); if(_receipt) setTimeout(sbDriveRun,8000); _receipt=''; _receiptDel=false;
   logAction(ME.name,moved?'Moved '+kind+' '+inr(toPaise(amount))+' from '+siteById(siteId).name+' to '+siteById(toSite).name+(rec.guestName?' ('+rec.guestName+')':''):(old?'Edited':'Added')+' '+kind+' '+inr(toPaise(amount)),toSite);
   closeModal(); render(); toast(moved?'Moved to '+siteById(toSite).name:old?'Updated':'Saved');
 }
@@ -2501,7 +2521,8 @@ function _sbB64(str){ const bytes=new TextEncoder().encode(str); let bin=''; for
 const _rcKey=e=>e.id+'_'+String((e.receipt||'').length);
 function _sbdReceiptJobs(){
   const done=(_sbd&&_sbd.done)||{};
-  return active('expenses').filter(e=>e.receipt&&String(e.receipt).indexOf('data:')===0&&!done[_rcKey(e)]);
+  const ok=e=>e.receipt&&String(e.receipt).indexOf('data:')===0&&!done[_rcKey(e)];
+  return active('expenses').filter(ok).concat(active('incomes').filter(ok).map(i=>Object.assign(Object.create(i),{_inc:true})));
 }
 function backupData(){
   const data={app:'SiteBooks',version:1,exportedAt:new Date().toISOString(),exportedBy:ME?ME.name:'',counts:Object.fromEntries(KINDS.map(k=>[k,DB[k].length]))};
@@ -2525,7 +2546,7 @@ async function sbDriveRun(){
     if(!(_sbdVer>=2)){ const pj=await _sbdPost({action:'ping'}); _sbdVer=Number(pj.version||1); if(_sbdVer<2) throw new Error('Update the Drive script first (new version with app folders) — nothing is lost, it waits'); }
     await _sbdDaily();
     for(const e of _sbdReceiptJobs().slice(0,15)){
-      const s=siteById(e.siteId), what=(e.category||e.vendor||e.note||'Expense').slice(0,40);
+      const s=siteById(e.siteId), what=e._inc?('Received – '+(e.source||e.note||e.guestName||'Income')).slice(0,48):(e.category||e.vendor||e.note||'Expense').slice(0,40);
       await _sbdPost({action:'file',root:'SiteBooks',tenant:{tkey:'sb_'+e.siteId,site:'Receipts',folderName:s?s.name:'Site',noPrefix:true},fileName:`${e.date||''} – ${what} – Rs ${e.amount}.jpg`,data:e.receipt});
       await _sbdSet({['done.'+_rcKey(e)]:true}); _sbd.done[_rcKey(e)]=true; sent++;
     }
