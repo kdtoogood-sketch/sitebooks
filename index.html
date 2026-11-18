@@ -1330,7 +1330,7 @@ function quickBooking(){
   openModal(`<div class="modal-title">📅 Add Booking</div><div class="form-label">Which site?</div>${act.map(x=>`<button class="site-pick" onclick="openBookingForm(null,'${x.id}')">🏠 ${esc(x.name)}</button>`).join('')}<button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
 }
 function openBookingForm(id,siteId,pre){
-  const b=id?findLocal('purchases',id):null; pre=pre||{};
+  const b=id?findLocal('purchases',id):null; pre=pre||{}; _receipt=''; _receiptDel=false;
   const sid=b?b.siteId:siteId; const s=siteById(sid); if(!s){toast('Site not found');return;}
   const st=b?bkStatus(b):'new';
   const me=partnerList().find(p=>p.name===ME.name)?.id; const ids=(s.partners||[]).map(p=>p.pid);
@@ -1339,7 +1339,8 @@ function openBookingForm(id,siteId,pre){
   if(st==='paid'){ const inc=DB.incomes.find(x=>x.id===b.incomeId);
     openModal(`<div class="modal-title">📅 Offline booking · ${esc(s.name)}</div><div class="card">
       <div class="kv"><span>Guest</span><b>${esc(b.guest||'—')}</b></div><div class="kv"><span>Stay</span><b>${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)} · ${bkNights(b.checkIn,b.checkOut)} nights</b></div>
-      <div class="kv"><span>Received</span><b class="g">${inr(toPaise(inc.amount))}</b></div><div class="kv"><span>By</span><b>${paidByText(inc.receivedBy)} · ${fmtDate(inc.date)}</b></div></div>
+      <div class="kv"><span>Received</span><b class="g">${inr(toPaise(inc.amount))}</b></div><div class="kv"><span>By</span><b>${paidByText(inc.receivedBy)} · ${fmtDate(inc.date)}</b></div>
+      <div class="kv"><span>Screenshot</span><b>${inc.receipt?`<a onclick="viewReceipt('incomes','${inc.id}')">📎 See</a>`:'<span class="muted">none — add it in the income entry</span>'}</b></div></div>
       <div class="muted" style="margin:0 2px 10px">Paid — it is in Income. To change the amount, open the income entry.</div>
       <button class="submit-btn" onclick="closeModal();openIncomeForm('${sid}','${inc.id}')">Open income entry</button><button class="cancel-btn" onclick="closeModal()">Close</button>`); return; }
   openModal(`<div class="modal-title">${b?'✏️ Edit':'📅 Add'} Booking · ${esc(s.name)}</div>
@@ -1353,7 +1354,8 @@ function openBookingForm(id,siteId,pre){
     <div id="bk_info" class="muted" style="margin:-2px 2px 10px"></div>
     <label class="chk" style="margin:0 0 10px"><input type="checkbox" id="bk_paid" onchange="obkCalc()"> Paid already — add it to Income now</label>
     <div id="bk_paybox" style="display:none"><div class="form-row"><div class="form-group"><label class="form-label">Amount received (₹)</label><input type="number" inputmode="decimal" class="form-input" id="bk_amt"></div>
-      <div class="form-group"><label class="form-label">Received on</label><input type="date" class="form-input" id="bk_pdate" value="${todayStr()}"></div></div></div>
+      <div class="form-group"><label class="form-label">Received on</label><input type="date" class="form-input" id="bk_pdate" value="${todayStr()}"></div></div>
+      ${proofFieldHTML('','Payment screenshot')}</div>
     <button class="submit-btn" onclick="saveBooking(${b?`'${b.id}'`:'null'},'${sid}')">Save booking</button>
     ${b?`<div class="btn-row"><button class="site-btn" onclick="cancelBooking('${b.id}')">Not paid / cancelled</button><button class="site-btn" style="color:var(--red)" onclick="deleteBooking('${b.id}')">Delete</button></div>`:''}
     <button class="cancel-btn" onclick="closeModal()">Cancel</button>`);
@@ -1371,7 +1373,7 @@ function obkCalc(id,sid){
   $('bk_amt').oninput=()=>{$('bk_amt').dataset.touched=1;};
 }
 function _bkIncome(b,amount,date,old){
-  return {...(old||{id:uid()}),siteId:b.siteId,date,amount,kind:'booking',source:'Offline booking',note:b.guest||b.note||'Offline booking',guestName:b.guest||'',checkIn:b.checkIn,checkOut:b.checkOut,nights:bkNights(b.checkIn,b.checkOut),receivedBy:[{pid:b.collector,amount}],bookingRef:b.id};
+  return {...(old||{id:uid()}),siteId:b.siteId,date,amount,kind:'booking',source:'Offline booking',note:[b.guest,b.note].filter(Boolean).join(' · ')||'Offline booking',guestName:b.guest||'',checkIn:b.checkIn,checkOut:b.checkOut,nights:bkNights(b.checkIn,b.checkOut),receivedBy:[{pid:b.collector,amount}],bookingRef:b.id};
 }
 function saveBooking(id,sid){
   const old=id?findLocal('purchases',id):null;
@@ -1382,7 +1384,8 @@ function saveBooking(id,sid){
   const rec={...(old||{id:uid()}),type:'booking',item:'Booking',siteId:sid,checkIn:ci,checkOut:co,nights:bkNights(ci,co),guest:$('bk_guest').value.trim(),phone:$('bk_phone').value.trim(),rate:Number($('bk_rate').value||0),collector:$('bk_coll').value,note:$('bk_note').value.trim(),status:old?.status==='cancelled'?'pending':(old?.status||'pending')};
   if($('bk_paid').checked){
     const amount=Number($('bk_amt').value||0), date=$('bk_pdate').value; if(!(amount>0)){toast('Enter the amount received');return;} if(!date){toast('Pick the date received');return;}
-    const inc=saveRecord('incomes',_bkIncome(rec,amount,date),ME.name);
+    const inc=saveRecord('incomes',{..._bkIncome(rec,amount,date),receipt:_receipt||''},ME.name);
+    if(_receipt) setTimeout(sbDriveRun,8000); _receipt='';
     rec.status='paid'; rec.incomeId=inc.id; rec.paidOn=date;
     saveRecord('purchases',rec,ME.name);
     logAction(ME.name,'Offline booking paid: '+siteById(sid).name+' '+fmtDate(ci)+' → '+fmtDate(co)+' · '+inr(toPaise(amount))+' to '+pname(rec.collector),sid);
@@ -1583,7 +1586,7 @@ function proofFieldHTML(cur,label){
 async function pickReceipt(inp){
   const f=inp.files[0]; if(!f) return;
   try{ _receipt=await compressImage(f,900,0.72); _receiptDel=false; $('f_photo_prev').innerHTML=`<img class="rc" src="${_receipt}" onclick="viewReceiptSrc(this.src)"><a class="pf-rm" onclick="removeReceipt()">Remove photo</a>`; $('f_photo_lbl').textContent='📷 Change photo'; }catch(e){ toast('Could not read photo'); return; }
-  ocrFill(f,{amt:'f_amount',ref:null,date:'f_date',note:'f_note',status:'f_ocr'},todayStr());
+  ocrFill(f,$('bk_amt')?{amt:'bk_amt',ref:null,date:'bk_pdate',note:'bk_note',status:'f_ocr'}:{amt:'f_amount',ref:null,date:'f_date',note:'f_note',status:'f_ocr'},todayStr());
 }
 function removeReceipt(){ _receipt=''; _receiptDel=true; $('f_photo_prev').innerHTML='<div class="muted" style="font-size:12px;margin-top:6px">Photo will be removed when you save.</div>'; $('f_photo_lbl').textContent='📷 Add photo / screenshot'; const i=$('f_photo'); if(i) i.value=''; }
 function viewReceiptSrc(src){
