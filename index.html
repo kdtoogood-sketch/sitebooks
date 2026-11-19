@@ -832,6 +832,23 @@ function monthStays(stays,m,days){
   Object.values(night).forEach(l=>{ [...new Set(l.map(x=>x.kind))].forEach(k=>{ if(by[k])by[k].n++; }); });
   return {night,by,mEnd};
 }
+// one site's occupancy over a report period: months in range, booked nights by kind, nights available (from the site's start)
+function siteOccPeriod(s,from,to){
+  const today=todayStr(); let a=(from||s.startDate||today).slice(0,7), b=(to||today).slice(0,7); if(b>today.slice(0,7))b=today.slice(0,7); if(a>b)a=b;
+  const out={months:[],booked:0,avail:0,by:{airbnb:0,direct:0,pending:0}};
+  const stays=siteStays(s.id);
+  for(let m=a; m<=b; m=shiftMonth(m,1)){
+    const [y,mo]=m.split('-').map(Number), days=new Date(y,mo,0).getDate(), ms=monthStays(stays,m,days);
+    const startDay=(s.startDate&&s.startDate.slice(0,7)===m)?Number(s.startDate.slice(8,10)):(s.startDate&&s.startDate>ms.mEnd?days+1:1);
+    const nights=Object.keys(ms.night).length; if(startDay>days&&!nights)continue;
+    const avail=Math.max(nights,days-startDay+1);
+    const kinds={}; Object.entries(ms.night).forEach(([d,l])=>{ const k=l.some(x=>x.kind==='airbnb')?'airbnb':l.some(x=>x.kind==='direct')?'direct':'pending'; kinds[d]=k; out.by[k]++; });
+    out.months.push({m,days,startDay,kinds,booked:nights,avail}); out.booked+=nights; out.avail+=avail;
+    if(out.months.length>24)break;
+  }
+  out.pct=out.avail?Math.round(out.booked*100/out.avail):0;
+  return out;
+}
 function occupancyData(m){
   const [y,mo]=m.split('-').map(Number), days=new Date(y,mo,0).getDate();
   const rows=[], by={airbnb:{n:0,b:0,amt:0},direct:{n:0,b:0,amt:0},pending:{n:0,b:0,amt:0}};
@@ -1797,7 +1814,7 @@ function setupRecoveryCardHTML(s,withEdit){
   return `<div class="sec-hdr">Setup cost recovery ${withEdit?`<button class="add-btn" onclick="openSpreadForm('${s.id}')">Edit</button>`:''}</div><div class="card">
     ${line('Setup / one-time',r.setup,r.setupRec,c.setup,r.left,r.setupMonthly,true)}
     ${line('Security deposit',r.dep,r.depRec,c.dep,r.depLeft,r.depMonthly,c.depOn)}
-    <div class="muted" style="margin-top:6px">Used when Reports are set to “Setup costs: Spread”. Balances between partners always use what was actually paid.</div></div>`;
+    <div class="muted" style="margin-top:6px">Used when Reports include setup costs and count them “Spread monthly”. Balances between partners always use what was actually paid.</div></div>`;
 }
 function openSpreadForm(id){
   const s=siteById(id), c=siteSpreadCfg(s);
@@ -1841,6 +1858,9 @@ function siteReportHTML(s,_res){
     <div class="kv"><span>Profit before setup costs</span><b class="${res.runningProfit>=0?'g':'r'}">${inr(res.runningProfit,{plus:true})}</b></div>
     ${res.totalCapital?`<div class="kv"><span>Partner capital put in</span><b class="b">${inr(res.totalCapital)}</b></div>`:''}</div>`;
   if(REP_SETUP==='spread') h+=setupRecoveryCardHTML(s,false);
+  { const oc=siteOccPeriod(s,_repFrom,_repTo); if(oc.avail) h+=`<div class="card"><div class="kv"><span>📅 Occupancy</span><b>${oc.pct}%</b></div>
+      <div class="muted" style="font-size:12.5px">Booked <b>${oc.booked}</b> of ${oc.avail} nights · Airbnb ${oc.by.airbnb} · Direct ${oc.by.direct}${oc.by.pending?' · Pending '+oc.by.pending:''}</div>
+      <button class="mini-btn" style="margin-top:8px" onclick="openSiteMonth('${s.id}','${(oc.months[oc.months.length-1]||{}).m||monthStr()}','cal')">Open calendar</button></div>`; }
   h+=bookingBreakdownHTML([s.id],_repFrom,_repTo);
 
   // partner table
@@ -1876,7 +1896,8 @@ const BRAND='Urban Haven';
 const SETUP_KEY='sitebooks_setupmode_v1';
 let REP_SETUP=(()=>{ try{ const v=localStorage.getItem(SETUP_KEY); return ['paid','spread','out'].includes(v)?v:'spread'; }catch(e){ return 'spread'; } })();
 let REP_NO_SETUP=REP_SETUP!=='paid';   // true → partner cash columns are computed from the real (full) payments
-function setSetupMode(m){ REP_SETUP=m; REP_NO_SETUP=m!=='paid'; try{ localStorage.setItem(SETUP_KEY,m); }catch(e){} render(); }
+function setSetupMode(m){ if(m!=='out'){ try{ localStorage.setItem(SETUP_KEY+'_inc',m); }catch(e){} } REP_SETUP=m; REP_NO_SETUP=m!=='paid'; try{ localStorage.setItem(SETUP_KEY,m); }catch(e){} render(); }
+function _setupIncMode(){ try{ const v=localStorage.getItem(SETUP_KEY+'_inc'); return v==='paid'?'paid':'spread'; }catch(e){ return 'spread'; } }
 function modeOf(x){ return x===true?'out':(x===false||x==null)?'paid':x; }
 const isDeposit=e=>e.kind==='setup'&&/deposit|security/i.test((e.category||'')+' '+(e.note||''));
 function siteSpreadCfg(s){ s=s||{}; const n=v=>Math.max(1,Math.min(120,Math.round(Number(v)||12))); return {setup:n(s.setupMonths),dep:n(s.depositMonths),depOn:s.depositSpread!==false}; }
@@ -1926,8 +1947,9 @@ function repOverall(from,to){
   return computeOverall(sites,eb,ib,sb,{from,to});
 }
 function setupToggleHTML(){
-  const o=[['paid','As paid'],['spread','Spread'],['out','Leave out']];
-  return `<div class="filters mbar setupmode"><span>Setup costs:</span>${o.map(([k,l])=>`<button class="mini-btn ${REP_SETUP===k?'on':''}" onclick="setSetupMode('${k}')">${l}</button>`).join('')}</div>`+
+  const inc=REP_SETUP!=='out';
+  return `<label class="su-chk"><input type="checkbox" ${inc?'checked':''} onchange="setSetupMode(this.checked?_setupIncMode():'out')"> <b>Include setup &amp; one-time costs</b> <span class="muted">(furniture, setup bills, deposits)</span></label>`+
+    (inc?`<div class="filters mbar setupmode" style="margin-top:-2px"><span>Count them:</span>${[['spread','Spread monthly'],['paid','When paid']].map(([k,l])=>`<button class="mini-btn ${REP_SETUP===k?'on':''}" onclick="setSetupMode('${k}')">${l}</button>`).join('')}</div>`:'')+
     `<div class="muted" style="margin:-4px 2px 10px">${REP_SETUP==='spread'?'Setup bills and security deposits are spread month by month (set on each site’s Split tab, default 12 months). Balances between partners still use what was actually paid.':REP_SETUP==='out'?'Setup bills and deposits are left out of profit.':'Setup bills count in full in the month they were paid.'}</div>`;
 }
 function setupModeLabel(m){ m=modeOf(m); return m==='spread'?'Spread monthly':m==='out'?'Left out':'Counted when paid'; }
@@ -3058,6 +3080,7 @@ function _pdfBWdoc(doc){
   const lum=c=>(0.299*c[0]+0.587*c[1]+0.114*c[2])/255;
   const sat=c=>(Math.max(...c)-Math.min(...c))/255;
   const t=doc.setTextColor.bind(doc), f=doc.setFillColor.bind(doc), d=doc.setDrawColor.bind(doc);
+  doc._rawFill=f; doc._rawText=t; doc._rawDraw=d;      // for exact greys (calendar shading)
   doc.setTextColor=(...a)=>{ if(typeof a[0]==='string')return t(...a); const c=rgb(a), L=lum(c);
     if(L>0.9)return t(255,255,255);                                  // white text on the black bands
     if(sat(c)<0.12&&L>0.45)return t(70,70,70);                       // grey notes stay a little lighter
@@ -3104,6 +3127,16 @@ function makePDF(sitesToShow,title,from,to,ropts){
     doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...DARK);doc.text('Site-wise',ML,y);y+=2;y=hr(y,O);y+=3;
     doc.setFillColor(...O);doc.rect(ML,y-1,CW,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...WHITE);doc.text('Site',ML+1,y+4);doc.text('Income',ML+95,y+4,{align:'right'});doc.text('Expenses',ML+135,y+4,{align:'right'});doc.text('Profit / Loss',MR-1,y+4,{align:'right'});y+=9;
     let alt=false; o.per.forEach(({site,res})=>{ y=checkY(y,8); if(alt){doc.setFillColor(...LIGHT);doc.rect(ML,y-1,CW,7,'F');} alt=!alt; doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...DARK);doc.text(doc.splitTextToSize(site.name,70)[0],ML+1,y+4);doc.setTextColor(...GREEN);doc.text(pdfMoney(res.totalInc),ML+95,y+4,{align:'right'});doc.setTextColor(...RED);doc.text(pdfMoney(res.totalExp),ML+135,y+4,{align:'right'});doc.setFont('helvetica','bold');doc.setTextColor(...(res.profit>=0?GREEN:RED));doc.text(pdfMoney(res.profit),MR-1,y+4,{align:'right'});y+=7; });
+    // occupancy per site
+    { const occ=sitesToShow.map(st=>({st,oc:siteOccPeriod(st,from,to)})).filter(x=>x.oc.avail);
+      if(occ.length){ y=checkY(y,20); y+=6; doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...DARK);doc.text('Occupancy',ML,y);y+=2;y=hr(y,O);y+=3;
+        doc.setFillColor(...O);doc.rect(ML,y-1,CW,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...WHITE);
+        doc.text('Site',ML+1,y+4);doc.text('Booked nights',ML+80,y+4,{align:'right'});doc.text('Airbnb',ML+110,y+4,{align:'right'});doc.text('Direct',ML+135,y+4,{align:'right'});doc.text('Pending',ML+158,y+4,{align:'right'});doc.text('Occupancy',MR-1,y+4,{align:'right'});y+=8;
+        let al=false; occ.forEach(({st,oc})=>{ y=checkY(y,8); if(al){doc.setFillColor(...LIGHT);doc.rect(ML,y-1,CW,7,'F');} al=!al; doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...DARK);
+          doc.text(st.name,ML+1,y+4); doc.text(oc.booked+' / '+oc.avail,ML+80,y+4,{align:'right'}); doc.text(String(oc.by.airbnb),ML+110,y+4,{align:'right'}); doc.text(String(oc.by.direct),ML+135,y+4,{align:'right'}); doc.text(String(oc.by.pending),ML+158,y+4,{align:'right'});
+          doc.setFont('helvetica','bold'); doc.text(oc.pct+'%',MR-1,y+4,{align:'right'}); y+=7; });
+        const tb=occ.reduce((a,x)=>a+x.oc.booked,0), ta=occ.reduce((a,x)=>a+x.oc.avail,0);
+        doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.text('All sites',ML+1,y+4);doc.text(tb+' / '+ta,ML+80,y+4,{align:'right'});doc.text((ta?Math.round(tb*100/ta):0)+'%',MR-1,y+4,{align:'right'});y+=8; } }
     // monthly
     if(o.byMonth.length){ y=checkY(y,30); y+=6; doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...DARK);doc.text('Month by month',ML,y);y+=2;y=hr(y,O);y+=3;
       doc.setFillColor(...O);doc.rect(ML,y-1,CW,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...WHITE);doc.text('Month',ML+1,y+4);doc.text('Income',ML+95,y+4,{align:'right'});doc.text('Expenses',ML+135,y+4,{align:'right'});doc.text('Profit / Loss',MR-1,y+4,{align:'right'});y+=9;
@@ -3123,6 +3156,34 @@ function makePDF(sitesToShow,title,from,to,ropts){
     [['INCOME',res.totalInc,GREEN],['EXPENSES',res.totalExp,RED],[res.profit<0?'LOSS':'PROFIT',res.profit,res.profit>=0?GREEN:RED],[MODE==='out'?'SETUP (LEFT OUT)':MODE==='spread'?'SETUP SHARE':'SETUP COST',MODE==='spread'?res.totalSetupExp:resFull.totalSetupExp,MODE==='out'?MUT:O]].forEach(([l,v,c],i)=>{ const bx=ML+i*(bw+2.7); doc.setLineWidth(0.25);doc.setDrawColor(...BDR);doc.setFillColor(...LIGHT);doc.rect(bx,y,bw,20,'FD');doc.setDrawColor(...c);doc.setLineWidth(1.2);doc.line(bx,y,bx+bw,y);doc.setLineWidth(0.25);doc.setFont('helvetica','bold');doc.setFontSize(6);doc.setTextColor(...MUT);doc.text(l,bx+bw/2,y+6,{align:'center'});doc.setFontSize(v>=100000000?7:9);doc.setTextColor(...c);doc.text(pdfMoney(v),bx+bw/2,y+14,{align:'center'}); }); y+=27;
     { const b=bookingBreakdown([site.id],from,to); if(b.withBk){ doc.setFillColor(...LIGHT);doc.rect(ML,y-2,CW,9,'F'); doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...DARK);
       doc.text('Bookings:  Guest paid '+pdfMoney(b.gross)+'   |   Airbnb fees -'+pdfMoney(b.fee)+'   |   TDS -'+pdfMoney(b.tds)+(b.other?'   |   Other -'+pdfMoney(b.other):'')+'   |   Net in hand '+pdfMoney(b.net),ML+2,y+3.5); y+=12; } }
+
+    // occupancy calendar (same counting as the app's Calendar tab)
+    { const oc=siteOccPeriod(site,from,to);
+      if(oc.avail){
+        y=checkY(y,16); doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...DARK);doc.text('Occupancy — booked '+oc.booked+' of '+oc.avail+' nights  ('+oc.pct+'%)',ML,y);
+        doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.text('Airbnb '+oc.by.airbnb+'   Direct '+oc.by.direct+(oc.by.pending?'   Pending '+oc.by.pending:''),MR,y,{align:'right'});y+=2;y=hr(y,O);y+=3;
+        // legend
+        const lg=(x,g,lab,out)=>{ doc._rawFill(g,g,g); doc._rawDraw(0,0,0); doc.setLineWidth(0.2); doc.rect(x,y-2.6,3.2,3.2,out?'FD':'F'); doc._rawText(0,0,0); doc.setFontSize(7); doc.text(lab,x+4.5,y); };
+        lg(ML,0,'Airbnb'); lg(ML+22,120,'Direct'); lg(ML+42,215,'Pending (not paid yet)',true); lg(ML+82,255,'Free',true); y+=5;
+        const months=oc.months.slice(-3), gap=4, cw=(CW-gap*(months.length-1))/months.length, cellW=cw/7, cellH=Math.min(6,cellW*0.72);
+        const top=y; let maxH=0;
+        months.forEach((mo,i)=>{ const x0=ML+i*(cw+gap); let yy=top;
+          doc._rawText(0,0,0); doc.setFont('helvetica','bold');doc.setFontSize(8); doc.text(new Date(mo.m+'-01T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'})+'  ·  '+mo.booked+'/'+mo.avail+' nights · '+(mo.avail?Math.round(mo.booked*100/mo.avail):0)+'%',x0,yy); yy+=2.5;
+          doc.setFont('helvetica','normal');doc.setFontSize(6.5);
+          ['S','M','T','W','T','F','S'].forEach((w,k)=>{ doc._rawText(90,90,90); doc.text(w,x0+k*cellW+cellW/2,yy+2.6,{align:'center'}); }); yy+=4;
+          const [Y,M]=mo.m.split('-').map(Number), first=new Date(Y,M-1,1).getDay();
+          for(let dd=1; dd<=mo.days; dd++){ const pos=first+dd-1, r=Math.floor(pos/7), c=pos%7, cx=x0+c*cellW, cy=yy+r*cellH, ds=mo.m+'-'+String(dd).padStart(2,'0'), k=mo.kinds[ds];
+            const g=k==='airbnb'?0:k==='direct'?120:k==='pending'?215:255, notOurs=dd<mo.startDay&&!k;
+            doc._rawFill(g,g,g); doc._rawDraw(160,160,160); doc.setLineWidth(0.15); doc.rect(cx+0.3,cy+0.3,cellW-0.6,cellH-0.6,'FD');
+            if(notOurs){ doc._rawDraw(190,190,190); doc.line(cx+0.6,cy+cellH-0.6,cx+cellW-0.6,cy+0.6); }
+            if(k==='pending'){ doc._rawDraw(0,0,0); doc.setLineWidth(0.3); doc.rect(cx+0.3,cy+0.3,cellW-0.6,cellH-0.6,'S'); }
+            doc._rawText(g<=120?255:notOurs?170:0, g<=120?255:notOurs?170:0, g<=120?255:notOurs?170:0); doc.setFontSize(6.8); doc.setFont('helvetica',k?'bold':'normal');
+            doc.text(String(dd),cx+cellW/2,cy+cellH/2+1.2,{align:'center'}); }
+          const rows=Math.ceil((first+mo.days)/7); maxH=Math.max(maxH,(yy-top)+rows*cellH); });
+        y=top+maxH+3;
+        if(oc.months.length>3){ doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(...MUT);doc.text('Calendar shows the last 3 months of the period; the figures above cover all '+oc.months.length+' months.',ML,y);y+=4; }
+        y+=3;
+      } }
 
     // partner table
     doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...DARK);doc.text('Partners — who paid, who owes',ML,y);y+=2;y=hr(y,O);y+=3;
