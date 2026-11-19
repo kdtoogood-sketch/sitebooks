@@ -3051,13 +3051,31 @@ function viewLog(){
 function pdfMoney(paise){ const n=Math.round(Math.abs(paise)/100); const s=String(n); const l3=s.slice(-3), r=s.slice(0,-3); return (paise<0?'-':'')+'Rs. '+(r?r.replace(/\B(?=(\d{2})+(?!\d))/g,',')+',':'')+l3; }
 function fmtDPdf(d){ return fmtDate(d).replace(/ /g,'-'); }
 
+// Reports print on a black & white laser: turn every colour into clean black / grey so nothing prints muddy.
+// Orange bands → black with white text; green/red figures → black; light stripes → light grey; borders → mid grey.
+function _pdfBWdoc(doc){
+  const rgb=a=>a.length>=3?[+a[0],+a[1],+a[2]]:[+a[0],+a[0],+a[0]];
+  const lum=c=>(0.299*c[0]+0.587*c[1]+0.114*c[2])/255;
+  const sat=c=>(Math.max(...c)-Math.min(...c))/255;
+  const t=doc.setTextColor.bind(doc), f=doc.setFillColor.bind(doc), d=doc.setDrawColor.bind(doc);
+  doc.setTextColor=(...a)=>{ if(typeof a[0]==='string')return t(...a); const c=rgb(a), L=lum(c);
+    if(L>0.9)return t(255,255,255);                                  // white text on the black bands
+    if(sat(c)<0.12&&L>0.45)return t(70,70,70);                       // grey notes stay a little lighter
+    return t(0,0,0); };
+  doc.setFillColor=(...a)=>{ if(typeof a[0]==='string')return f(...a); const c=rgb(a), L=lum(c);
+    if(L<0.8)return f(0,0,0);                                         // orange header and table bands → black
+    const v=Math.round(Math.min(238,Math.max(228,L*255))); return f(v,v,v); };   // light stripes → light grey
+  doc.setDrawColor=(...a)=>{ if(typeof a[0]==='string')return d(...a); const c=rgb(a), L=lum(c);
+    return L<0.8?d(0,0,0):d(150,150,150); };
+  return doc;
+}
 function makePDF(sitesToShow,title,from,to,ropts){
   ropts=ropts||{};
   const MODE=modeOf(ropts.noSetup); ropts.noSetup=MODE!=='paid';
   const exOf=sid=>expForMode(sid,MODE);
   const ledOf=sid=>MODE==='out'?expensesOf(sid).filter(e=>e.kind!=='setup'):expensesOf(sid);
   if(!window.jspdf||!window.jspdf.jsPDF){ alert('PDF library did not load. Check your internet connection and try again.'); return null; }
-  const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'mm',format:'a4'});
+  const {jsPDF}=window.jspdf; const doc=_pdfBWdoc(new jsPDF({unit:'mm',format:'a4'}));
   const PW=210,PH=297,ML=14,MR=196,CW=MR-ML;
   const O=[240,90,0],DARK=[28,29,46],MUT=[148,150,176],WHITE=[255,255,255],LIGHT=[247,248,252],GREEN=[22,160,106],RED=[224,53,53],BDR=[220,224,240];
   let pageNum=0;
